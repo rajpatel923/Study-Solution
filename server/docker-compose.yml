@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+
+  # PostgreSQL database for Auth and Core Services
+  postgres:
+    container_name: postgres_db
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: StudySolution
+      POSTGRES_PASSWORD: StudySolution
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    ports:
+      - 5434:5432
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  # MongoDB Database
+  mongodb:
+    container_name: ms_mongo_db
+    image: mongo:latest
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo:/data
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: StudySolution
+      MONGO_INITDB_ROOT_PASSWORD: StudySolution
+    networks:
+      - microservices-net
+
+  # Mongo Express for Database UI
+  mongo-express:
+    image: mongo-express
+    container_name: ms_mongo_express
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: StudySolution
+      ME_CONFIG_MONGODB_ADMINPASSWORD: StudySolution
+      ME_CONFIG_MONGODB_SERVER: mongodb
+    networks:
+      - microservices-net
+
+  # MailDev for Email Testing
+  mail-dev:
+    container_name: ms_mail_dev
+    image: maildev/maildev
+    ports:
+      - 1080:1080
+      - 1025:1025
+    networks:
+      - microservices-net
+
+networks:
+  microservices-net:
+    driver: bridge
+
+volumes:
+  postgres:
+  mongo:
