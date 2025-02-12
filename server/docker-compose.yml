@@ -21,7 +21,7 @@ services:
   # MongoDB Database
   mongodb:
     container_name: ms_mongo_db
-    image: mongo:latest
+    image: mongo
     ports:
       - 27017:27017
     volumes:
@@ -35,7 +35,7 @@ services:
   # Mongo Express for Database UI
   mongo-express:
     image: mongo-express
-    container_name: ms_mongo_express
+    container_name: mongo_express
     restart: unless-stopped
     depends_on:
       - mongodb
