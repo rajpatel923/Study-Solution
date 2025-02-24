@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,7 +24,7 @@ public class UserProfileController {
     public ResponseEntity<Object> createUserProfile(@RequestBody @Valid UserProfileRequest request){
         // passing request to service
         // service will imple and save the data to database
-        // this will return user infomation saved (user profile back)
+        // this will return user information saved (user profile back)
         // take that user profile send to user
         try {
             UserProfile userProfile = this.service.createUserProfile(request);
