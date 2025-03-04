@@ -27,7 +27,7 @@ export default function HeroSection() {
           </Button>
         </div>
 
-        {/* Mascot Image (Optional) */}
+        {/* Mascot Image */}
         <div className="flex justify-center mt-6">
           <img src="/catstudy.png" alt="Mascot" className="w-400" />
         </div>
