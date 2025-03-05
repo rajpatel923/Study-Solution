@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 public class UserProfileMapper {
     public UserProfile toUserProfile(UserProfileRequest request){
         if (request == null) return null;
+
         UserMetaData userMetaData = UserMetaData.builder()
                 .userId(request.userId())
                 .metadata(request.metadata())

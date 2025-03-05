@@ -10,10 +10,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.validator.constraints.UniqueElements;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
-import org.springframework.data.mongodb.core.mapping.FieldType;
-import org.springframework.data.mongodb.core.mapping.MongoId;
+import org.springframework.data.mongodb.core.mapping.*;
 
 @Document(collection = "UserProfile")
 @Data
@@ -36,6 +33,8 @@ public class UserProfile {
     private String firstName;
     private String lastName;
     private String bio;
+
+    @DBRef
     private UserMetaData metaData;
 
 }
