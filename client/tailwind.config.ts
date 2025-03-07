@@ -15,8 +15,10 @@ export default {
         primaryHover: "#00B3A0", // Hover effect for buttons
         dark: "#292929", // Background for navbar
         darkAccent: "#1E1E1E", // Search bar background
+        darkLight: "#7c7c7c",
         borderColor: "#555", // Border for login button
         textGray: "#A0A0A0", // Placeholder text color
+
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

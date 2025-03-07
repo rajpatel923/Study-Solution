@@ -51,9 +51,11 @@ export default function NavBar() {
 
         {/* Buttons */}
         <div className="hidden md:flex items-center space-x-4">
-          <Button variant="outline" className="rounded-md border-borderColor bg-transparent text-white px-buttonPaddingX py-buttonPaddingY font-normal ">
-            Login
-          </Button>
+          <Link href={"/login"}>
+            <Button variant="outline" className="rounded-md border-borderColor bg-transparent text-white px-buttonPaddingX py-buttonPaddingY font-normal ">
+              Login
+            </Button>
+          </Link>
           <Button className="rounded-md bg-primaryCustome hover:bg-primaryHover text-white px-buttonPaddingX py-buttonPaddingY font-semibold">
             Get Started
           </Button>
