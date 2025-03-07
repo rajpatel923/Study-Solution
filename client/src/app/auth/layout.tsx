@@ -17,10 +17,10 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       {/* Right: Preview / Marketing Section */}
       <div className="hidden  md:flex w-1/2 bg-gradient-to-b from-[#2c3e50] to-[#3498db] items-center justify-center relative">
         <div className="text-white text-center">
-          <h2 className="text-xl font-semibold mb-2">Knowts Quiz & Spaced Repetition</h2>
+          <h2 className="text-xl font-semibold mb-2">_</h2>
           <p className="max-w-sm mx-auto">
-            Im going to Columbia now and Knowt helped me get there 
-            <br /> – Victoria Burride Sermon, College freshman
+            _
+            <br /> _
           </p>
           <div className="mt-4">
             <Image

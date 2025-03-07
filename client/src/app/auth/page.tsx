@@ -13,7 +13,7 @@ import Select from "@/components/ui/select";
 import SocialAuthButtons from "@/components/common/auth/socialAuthButton";
 // Login schema
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address."),
+  username: z.string().min(3, "Username must be at least 3 characters."),
   password: z.string().min(6, "Password must be at least 6 characters."),
 });
 
@@ -64,20 +64,26 @@ export default function AuthPage() {
 
   const onLoginSubmit: SubmitHandler<LoginFormData> = async (data) => {
     try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        alert("Login failed");
-        return;
+        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8091";
+        
+        const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          credentials: "include", // 👈 Send cookies (if using sessions/authentication)
+        });
+    
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert(errorData.message || "Login failed");
+          return;
+        }
+    
+        router.push("/");
+      } catch (error) {
+        console.error("Login error:", error);
+        alert("An error occurred. Please try again.");
       }
-      router.push("/dashboard");
-    } catch {
-      alert("An error occurred. Please try again.");
-    }
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormData> = async (data) => {
@@ -126,8 +132,8 @@ export default function AuthPage() {
       {authMode === "login" && (
         <>
           {/* Heading */}
-          <h1 className="text-3xl font-bold mb-1">Hi there!</h1>
-          <p className="text-gray-400 mb-8">Welcome to Knowt. The best all-in-one Pilot for studying.</p>
+          <h1 className="text-4xl font-bold mb-6 text-center">Hi there!</h1>
+          <p className="text-textGray mb-8 text-center">Welcome to StudySync. The best all-in-one Captain for studying.</p>
 
           {/* Social Auth Buttons */}
           <div className="max-w-lg w-full mx-auto">
@@ -135,13 +141,19 @@ export default function AuthPage() {
           </div>
 
           {/* Email & Password Form */}
-          <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="space-y-4">
-            <Input
+          <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="space-y-4 mx-auto w-full max-w-lg">
+            {/* <Input
               label="Email"
               type="email"
               registration={registerLogin("email")}
               error={loginErrors.email?.message}
               placeholder="Enter your email"
+            /> */}
+            <Input
+              label="Username"
+              registration={registerLogin("username")}
+              error={signupErrors.username?.message}
+              placeholder="Enter your username"
             />
 
             <Input
@@ -150,24 +162,26 @@ export default function AuthPage() {
               registration={registerLogin("password")}
               error={loginErrors.password?.message}
               placeholder="Enter your password"
+              className=""
             />
+            <div className="text-right">
+                <a href="#" className="text-white hover:text-white text-xs">
+                Forgot password? Reset it
+                </a>
+            </div>
 
-            <Button type="submit" className="w-full mt-4">
+            <Button type="submit" className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2">
               Login
             </Button>
           </form>
 
-          <div className="mt-3 text-right">
-            <a href="#" className="text-gray-400 hover:text-white text-sm">
-              Forgot password? Reset it
-            </a>
-          </div>
+          
 
           <div className="mt-4 text-center">
-            <span className="text-gray-400">Dont have an account?</span>{" "}
+            <span className="text-white">Dont have an account?</span>{" "}
             <button
               onClick={() => setAuthMode("signup")}
-              className="text-[#00D1C0] hover:underline"
+              className="text-yellow-300 hover:underline"
             >
               Sign up
             </button>
@@ -179,8 +193,8 @@ export default function AuthPage() {
       {authMode === "signup" && (
         <>
           {/* Heading */}
-          <h1 className="text-3xl font-bold mb-1">Join the Knowt side.</h1>
-          <p className="text-gray-400 mb-8">Become part of the best all-in-one Pilot for studying.</p>
+          <h1 className="text-3xl font-bold mb-1 text-center">Join the StudySync side.</h1>
+          <p className="text-gray-400 mb-8 text-center">Become part of the best all-in-one Caption for studying.</p>
 
           {/* Social Auth Buttons */}
           <div className="max-w-lg w-full mx-auto">
@@ -188,7 +202,7 @@ export default function AuthPage() {
           </div>
 
           {/* Signup Form */}
-          <form onSubmit={handleSubmitSignup(onSignupSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmitSignup(onSignupSubmit)} className="space-y-4 mx-auto w-full max-w-lg ">
             {/* Birthday */}
             <Input
               label="Birthday"
@@ -244,7 +258,7 @@ export default function AuthPage() {
               placeholder="Enter your password"
             />
 
-            <Button type="submit" className="w-full mt-4">
+            <Button type="submit" className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2">
               Sign Up
             </Button>
           </form>
@@ -253,7 +267,7 @@ export default function AuthPage() {
             <span className="text-gray-400">Already have an account?</span>{" "}
             <button
               onClick={() => setAuthMode("login")}
-              className="text-[#00D1C0] hover:underline"
+              className="text-[#00D1C0] hover:underline "
             >
               Sign in
             </button>
