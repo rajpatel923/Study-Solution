@@ -31,7 +31,7 @@ export default function HeroSection() {
         {/* Mascot Image */}
         <div className="flex justify-center mt-12"> {/* Increased margin top for image spacing */}
           <Image
-            src="/catstudy.png" // Changed image source to match example - **Replace with your image path**
+            src="/catstudy.png" // Changed image source to match example - 
             alt="Mascot"
             width={500} // Adjusted width for better responsiveness
             height={350} // Adjusted height, maintain aspect ratio or adjust as needed
