@@ -3,52 +3,65 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X, Search } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 const navLinks = [
   { href: "#home", label: "Home" },
   { href: "#explore", label: "Explore" },
-  { href: "#exam", label: "Exam" },
+  { href: "#exam", label: "Exams" },
 ];
 
 export default function NavBar() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <header className="fixed w-full top-0 left-0 bg-white shadow-md z-50">
-      <nav className="container mx-auto flex items-center justify-between p-4">
+    <header className="fixed w-full top-0 left-0 bg-dark z-50">
+      <nav className="container mx-auto flex items-center justify-between px-navPaddingX py-navPaddingY">
         {/* Logo */}
-        <Link href="/" className="text-2xl font-bold">
-          Study Sync
+        <Link href="/" className="flex items-center">
+          <Image src="/images/logo.png" alt="Logo" width={48} height={48} />
         </Link>
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex space-x-6">
-          {navLinks.map(({ href, label }) => (
-            <Link key={href} href={href} className="hover:text-blue-600">
-              {label}
-            </Link>
-          ))}
-        </div>
+        {/* Combined Nav Links and Search */}
+        <div className="hidden md:flex items-center space-x-8">
+          {/* Navigation Links */}
+          <div className="flex items-center space-x-6">
+            {navLinks.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="text-white text-lg font-medium hover:text-primaryCustome"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
 
-        {/* Search & Buttons */}
-        <div className="hidden md:flex items-center space-x-4">
-          <div className="relative">
+          {/* Search Bar */}
+          <div className="hidden md:flex items-center bg-darkAccent rounded-md w-[400px] px-3 py-2">
+            <Search className="text-textGray" size={18} />
             <input
               type="text"
-              placeholder="Search..."
-              className="border rounded-lg px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              aria-label="Search"
+              placeholder="Search for anything"
+              className="bg-transparent text-white placeholder-textGray px-2 w-full focus:outline-none"
             />
-            <Search className="absolute right-3 top-2.5 text-gray-500" size={18} />
           </div>
-          <Button variant="outline">Login</Button>
-          <Button>Get Started</Button>
+        </div>
+
+        {/* Buttons */}
+        <div className="hidden md:flex items-center space-x-4">
+          <Button variant="outline" className="rounded-md border-borderColor bg-transparent text-white px-buttonPaddingX py-buttonPaddingY font-normal ">
+            Login
+          </Button>
+          <Button className="rounded-md bg-primaryCustome hover:bg-primaryHover text-white px-buttonPaddingX py-buttonPaddingY font-semibold">
+            Get Started
+          </Button>
         </div>
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden"
+          className="md:hidden text-white"
           onClick={() => setIsOpen(!isOpen)}
           aria-label="Toggle menu"
         >
@@ -58,9 +71,9 @@ export default function NavBar() {
 
       {/* Mobile Navigation */}
       {isOpen && (
-        <div className="md:hidden bg-white shadow-md p-4 space-y-2">
+        <div className="md:hidden bg-dark p-4 space-y-4">
           {navLinks.map(({ href, label }) => (
-            <Link key={href} href={href} className="block">
+            <Link key={href} href={href} className="block text-white text-lg">
               {label}
             </Link>
           ))}
@@ -68,13 +81,16 @@ export default function NavBar() {
             <input
               type="text"
               placeholder="Search..."
-              className="border rounded-lg px-3 py-1 w-full focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-4 py-2 bg-darkAccent text-white rounded-md placeholder-textGray focus:ring-2 focus:ring-primaryCustome"
               aria-label="Search"
             />
-            <Search className="absolute right-3 top-2.5 text-gray-500" size={18} />
           </div>
-          <Button className="w-full mt-2">Login</Button>
-          <Button className="w-full mt-2">Get Started</Button>
+          <Button variant="outline" className="w-full mt-2 rounded-md border-borderColor text-white font-normal">
+            Login
+          </Button>
+          <Button className="w-full mt-2 rounded-md bg-primaryCustome hover:bg-primaryHover text-white font-normal">
+            Get Started
+          </Button>
         </div>
       )}
     </header>
