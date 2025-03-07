@@ -33,8 +33,4 @@ public class UserProfile {
     private String firstName;
     private String lastName;
     private String bio;
-
-    @DBRef
-    private UserMetaData metaData;
-
 }

@@ -17,7 +17,7 @@ import org.springframework.data.mongodb.core.mapping.MongoId;
 
 import java.util.Map;
 
-@Document(collection = "user_metadata")
+@Document(collection = "User_metadata")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

@@ -11,16 +11,11 @@ public class UserProfileMapper {
     public UserProfile toUserProfile(UserProfileRequest request){
         if (request == null) return null;
 
-        UserMetaData userMetaData = UserMetaData.builder()
-                .userId(request.userId())
-                .metadata(request.metadata())
-                .build();
         return UserProfile.builder()
                 .userId(request.userId())
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .bio(request.bio())
-                .metaData(userMetaData)
                 .build();
     }
 }
