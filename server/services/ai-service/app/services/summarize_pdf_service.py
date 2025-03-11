@@ -25,7 +25,7 @@ def get_summary_by_id(summary_id: str) -> dict:
     """
     try:
         db_client = get_mongodb_client()
-        db = db_client["study_assistant"]
+        db = db_client["ai_service"]
         summaries_collection = db["summaries"]
 
         summary = summaries_collection.find_one({"_id": ObjectId(summary_id)})
@@ -67,7 +67,7 @@ def get_summaries_for_user(user_id: str, limit: int = 10) -> dict:
     """
     try:
         db_client = get_mongodb_client()
-        db = db_client["study_assistant"]
+        db = db_client["ai_service"]
         summaries_collection = db["summaries"]
 
         # Get summaries sorted by creation date (newest first)
@@ -125,7 +125,7 @@ def split_into_chunks(documents: List[Any],
 def process_document_in_chunks(documents: List[Any],
                                chain: Any,
                                user_prompt: str = None,
-                               max_chunks_per_batch: int = 10) -> str:
+                               max_chunks_per_batch: int = 10, chain_type: str = "map_reduce") -> str:
     """
     Processes documents in manageable batches to avoid context length issues.
 
@@ -140,6 +140,26 @@ def process_document_in_chunks(documents: List[Any],
     """
     if not documents:
         return "No document content to process."
+
+    default_prompt = "Provide a comprehensive academic summary"
+
+    # For refine chain type, process chunks sequentially
+    if chain_type == "refine":
+        # Start with first chunk
+        current_summary = chain.run(
+            input_documents=[documents[0]],
+            user_prompt=user_prompt if user_prompt else default_prompt
+        )
+
+        # Refine with subsequent chunks
+        for i in range(1, len(documents)):
+            current_summary = chain.run(
+                input_documents=[documents[i]],
+                existing_summary=current_summary,
+                user_prompt=user_prompt if user_prompt else default_prompt
+            )
+
+        return current_summary
 
     # If fewer chunks than max batch size, process directly
     if len(documents) <= max_chunks_per_batch:
@@ -214,14 +234,14 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
         }
 
         # 2. Initialize Language Model
-        # llm = ChatOpenAI(
-        #     openai_api_key=os.environ.get("OPENAI_API_KEY"),
-        #     model_name="gpt-4o",  # or gpt-4 for higher quality
-        #     temperature=0.5
-        # )
-        llm = OllamaLLM(
-            model ="llama3.2-vision:latest",
+        llm = ChatOpenAI(
+            openai_api_key=os.environ.get("OPENAI_API_KEY"),
+            model_name="gpt-4o",  # or gpt-4 for higher quality
+            temperature=0.5
         )
+        # llm = OllamaLLM(
+        #     model ="llama3.2-vision:latest",
+        # )
 
         # 3. Split text into chunks with our improved chunker
         chunks = split_into_chunks(documents)
@@ -321,37 +341,39 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
 
         # 6. Process document in chunks
         summary_output = process_document_in_chunks(
-            chunks, chain, prompt
+            chunks, chain, prompt, chain_type=chain_type
         )
 
-        # 7. Adjust Summary Length if needed
-        if summary_length == "short":
-            # For short summaries, ask LLM to condense
-            condense_prompt = PromptTemplate.from_template(
-                "Condense the following summary to approximately 300-500 words while "
-                "retaining all key information and main points:\n\n{original_summary}\n\n"
-                "Condensed summary:"
-            )
-            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-            summary_output = condensed_summary
+        print("\n\n\n"+summary_output+"\n\n\n")
 
-        elif summary_length == "long":
-            # Long summaries can use the full output
-            pass  # No modification needed
-
-        elif summary_length == "medium" and len(summary_output.split()) > 750:
-            # For medium summaries that are too long, ask LLM to condense
-            condense_prompt = PromptTemplate.from_template(
-                "Condense the following summary to approximately 600-750 words while "
-                "retaining all key information and main points:\n\n{original_summary}\n\n"
-                "Condensed summary:"
-            )
-            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-            summary_output = condensed_summary
+        # # 7. Adjust Summary Length if needed
+        # if summary_length == "short":
+        #     # For short summaries, ask LLM to condense
+        #     condense_prompt = PromptTemplate.from_template(
+        #         "Condense the following summary to approximately 300-500 words while "
+        #         "retaining all key information and main points:\n\n{original_summary}\n\n"
+        #         "Condensed summary:"
+        #     )
+        #     condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
+        #     summary_output = condensed_summary
+        #
+        # elif summary_length == "long":
+        #     # Long summaries can use the full output
+        #     pass  # No modification needed
+        #
+        # elif summary_length == "medium" and len(summary_output.split()) > 750:
+        #     # For medium summaries that are too long, ask LLM to condense
+        #     condense_prompt = PromptTemplate.from_template(
+        #         "Condense the following summary to approximately 600-750 words while "
+        #         "retaining all key information and main points:\n\n{original_summary}\n\n"
+        #         "Condensed summary:"
+        #     )
+        #     condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
+        #     summary_output = condensed_summary
 
         # 8. Store Summary in MongoDB
         db_client = get_mongodb_client()
-        db = db_client["study_assistant"]
+        db = db_client["ai_service"]
 
         # Store document info if not already in DB
         docs_collection = db["documents"]
@@ -375,6 +397,8 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
             "word_count": len(summary_output.split())
         }
 
+        print(summary_data)
+
         # Insert summary into MongoDB
         summaries_collection = db["summaries"]
         summary_result = summaries_collection.insert_one(summary_data)
@@ -395,5 +419,3 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
             "summary": None,
             "error_message": error_message,
         }
-
-

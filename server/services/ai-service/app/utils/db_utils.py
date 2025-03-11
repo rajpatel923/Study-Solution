@@ -92,25 +92,41 @@ def initialize_database():
         # List of collections to initialize
         collections_to_setup = {
             "documents": [
-                ("url", ASCENDING, {"unique": True}),  # Use ASCENDING instead of HASHED for unique index
-                ("title", TEXT, {}),
-                ("user_id", ASCENDING, {})
+                ("url", ASCENDING, {"unique": True}),  # URL is unique
+                ("title", TEXT, {}),  # For text search on titles
+                ("uploaded_at", -1, {})  # For sorting by upload date
             ],
             "summaries": [
-                ("user_id", ASCENDING, {}),  # Use ASCENDING instead of HASHED
-                ("document_id", ASCENDING, {}),  # Use ASCENDING instead of HASHED
-                ("created_at", -1, {})
+                ("user_id", ASCENDING, {}),
+                ("document_id", ASCENDING, {}),
+                ("type", ASCENDING, {}),  # For filtering by summary type (general/custom)
+                ("prompt_used", TEXT, {}),  # For searching within prompts
+                ("length", ASCENDING, {}),  # For filtering by length category
+                ("created_at", -1, {}),  # For sorting by creation date (newest first)
+                ("word_count", ASCENDING, {})  # For filtering by actual word count
             ],
             "flashcards": [
-                ("user_id", ASCENDING, {}),  # Use ASCENDING instead of HASHED
-                ("document_id", ASCENDING, {})  # Use ASCENDING instead of HASHED
+                ("user_id", ASCENDING, {}),
+                ("document_id", ASCENDING, {}),
+                ("difficulty", ASCENDING, {}),  # For filtering by difficulty
+                ("category", ASCENDING, {}),  # For filtering by category
+                ("tags", ASCENDING, {}),  # For filtering by tags
+                ("created_at", -1, {}),
+                ("review_count", ASCENDING, {}),  # For tracking review progress
+                ("confidence_level", ASCENDING, {})  # For spaced repetition algorithms
+            ],
+            "flashcard_sets": [
+                ("user_id", ASCENDING, {}),
+                ("document_id", ASCENDING, {}),  # Can create compound index if needed
+                ("created_at", -1, {}),
+                ("flashcard_count", ASCENDING, {})  # For filtering by set size
             ],
             "quizzes": [
-                ("user_id", ASCENDING, {}),  # Use ASCENDING instead of HASHED
-                ("document_id", ASCENDING, {})  # Use ASCENDING instead of HASHED
+                ("user_id", ASCENDING, {}),
+                ("document_id", ASCENDING, {})
             ],
             "study_plans": [
-                ("user_id", ASCENDING, {})  # Use ASCENDING instead of HASHED
+                ("user_id", ASCENDING, {})
             ]
         }
 

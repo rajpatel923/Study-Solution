@@ -1,4 +1,3 @@
-#summarizer.py
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.summary import SummaryCreate, SummaryResponse
 from app.services.summarize_pdf_service import summarize_pdf_notes, get_summary_by_id, get_summaries_for_user
