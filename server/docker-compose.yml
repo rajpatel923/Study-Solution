@@ -58,6 +58,31 @@ services:
     networks:
       - microservices-net
 
+  ai-service:
+    build:
+      context: ./services/ai-service   # Ensure this path points to your Python microservice directory
+      dockerfile: Dockerfile
+    ports:
+      - "8098:8098"
+    environment:
+      - EUREKA_SERVER_URL=http://localhost:8761/eureka/
+      - APP_NAME=ai-service
+      - PORT=8090
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MONGODB_URI=mongodb://StudySolution:StudySolution@mongodb:27017/ai_service?authSource=admin
+    depends_on:
+      - discovery-service   # Only include if your Eureka server is defined in this Compose file
+      - mongodb
+    networks:
+      - microservices-net  # Use the same network as your other services
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8098/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
 networks:
   microservices-net:
     driver: bridge

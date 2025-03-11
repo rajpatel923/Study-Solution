@@ -1,0 +1,37 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyInterpreterInspection" enabled="false" level="WARNING" enabled_by_default="false" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="16">
+            <item index="0" class="java.lang.String" itemvalue="SQLAlchemy" />
+            <item index="1" class="java.lang.String" itemvalue="langchain-core" />
+            <item index="2" class="java.lang.String" itemvalue="pyproject-hooks" />
+            <item index="3" class="java.lang.String" itemvalue="duckduckgo-search" />
+            <item index="4" class="java.lang.String" itemvalue="typing-extensions" />
+            <item index="5" class="java.lang.String" itemvalue="pydantic-core" />
+            <item index="6" class="java.lang.String" itemvalue="gradio-client" />
+            <item index="7" class="java.lang.String" itemvalue="jupyter-contrib-core" />
+            <item index="8" class="java.lang.String" itemvalue="jupyter-contrib-nbextensions" />
+            <item index="9" class="java.lang.String" itemvalue="pip" />
+            <item index="10" class="java.lang.String" itemvalue="langchain" />
+            <item index="11" class="java.lang.String" itemvalue="setuptools" />
+            <item index="12" class="java.lang.String" itemvalue="attrs" />
+            <item index="13" class="java.lang.String" itemvalue="debugpy" />
+            <item index="14" class="java.lang.String" itemvalue="tavily-python" />
+            <item index="15" class="java.lang.String" itemvalue="langsmith" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyUnresolvedReferencesInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredIdentifiers">
+        <list>
+          <option value="main.photoImage" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
