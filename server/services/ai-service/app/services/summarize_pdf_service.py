@@ -99,7 +99,7 @@ def get_summaries_for_user(user_id: str, limit: int = 10) -> dict:
 
 def split_into_chunks(documents: List[Any],
                       chunk_size: int = 1500,
-                      chunk_overlap: int = 300) -> List[Any]:
+                      chunk_overlap: int = 100) -> List[Any]:
     """
     Splits documents into smaller chunks suitable for LLM processing.
 
@@ -146,14 +146,14 @@ def process_document_in_chunks(documents: List[Any],
     # For refine chain type, process chunks sequentially
     if chain_type == "refine":
         # Start with first chunk
-        current_summary = chain.run(
+        current_summary = chain.invoke(
             input_documents=[documents[0]],
             user_prompt=user_prompt if user_prompt else default_prompt
         )
 
         # Refine with subsequent chunks
         for i in range(1, len(documents)):
-            current_summary = chain.run(
+            current_summary = chain.invoke(
                 input_documents=[documents[i]],
                 existing_summary=current_summary,
                 user_prompt=user_prompt if user_prompt else default_prompt
@@ -344,32 +344,32 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
             chunks, chain, prompt, chain_type=chain_type
         )
 
-        print("\n\n\n"+summary_output+"\n\n\n")
 
-        # # 7. Adjust Summary Length if needed
-        # if summary_length == "short":
-        #     # For short summaries, ask LLM to condense
-        #     condense_prompt = PromptTemplate.from_template(
-        #         "Condense the following summary to approximately 300-500 words while "
-        #         "retaining all key information and main points:\n\n{original_summary}\n\n"
-        #         "Condensed summary:"
-        #     )
-        #     condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-        #     summary_output = condensed_summary
-        #
-        # elif summary_length == "long":
-        #     # Long summaries can use the full output
-        #     pass  # No modification needed
-        #
-        # elif summary_length == "medium" and len(summary_output.split()) > 750:
-        #     # For medium summaries that are too long, ask LLM to condense
-        #     condense_prompt = PromptTemplate.from_template(
-        #         "Condense the following summary to approximately 600-750 words while "
-        #         "retaining all key information and main points:\n\n{original_summary}\n\n"
-        #         "Condensed summary:"
-        #     )
-        #     condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-        #     summary_output = condensed_summary
+
+        # 7. Adjust Summary Length if needed
+        if summary_length == "short":
+            # For short summaries, ask LLM to condense
+            condense_prompt = PromptTemplate.from_template(
+                "Condense the following summary to approximately 300-500 words while "
+                "retaining all key information and main points:\n\n{original_summary}\n\n"
+                "Condensed summary:"
+            )
+            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
+            summary_output = condensed_summary
+
+        elif summary_length == "long":
+            # Long summaries can use the full output
+            pass  # No modification needed
+
+        elif summary_length == "medium" and len(summary_output.split()) > 750:
+            # For medium summaries that are too long, ask LLM to condense
+            condense_prompt = PromptTemplate.from_template(
+                "Condense the following summary to approximately 600-750 words while "
+                "retaining all key information and main points:\n\n{original_summary}\n\n"
+                "Condensed summary:"
+            )
+            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
+            summary_output = condensed_summary
 
         # 8. Store Summary in MongoDB
         db_client = get_mongodb_client()
@@ -397,7 +397,7 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
             "word_count": len(summary_output.split())
         }
 
-        print(summary_data)
+
 
         # Insert summary into MongoDB
         summaries_collection = db["summaries"]
