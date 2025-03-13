@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useAuth } from "@/common/auth/AuthContext";
 
-import Input from "@/components/ui/input";
+import Input from "@/components/ui/customeInput";
 import { Button } from "@/components/ui/button";
 import Select from "@/components/ui/select";
 import SocialAuthButtons from "@/components/common/auth/socialAuthButton";
+
 // Login schema
 const loginSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters."),
@@ -34,17 +36,14 @@ type SignupFormData = z.infer<typeof signupSchema>;
 export default function AuthPage() {
   const router = useRouter();
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   
-  // Get the view based on URL query parameter if needed
-  // This allows direct links to login or signup
-  // useEffect(() => {
-  //   const searchParams = new URLSearchParams(window.location.search);
-  //   const view = searchParams.get('view');
-  //   if (view === 'signup') setAuthMode('signup');
-  //   if (view === 'login') setAuthMode('login');
-  // }, []);
-
-  // Login form
+  // Use our auth context
+  const { login, register: authRegister, isAuthenticated } = useAuth();
+  
+  // Initialize both forms regardless of which one is displayed
+  // This fixes the React Hook rule violation by ensuring hooks are always called in the same order
   const {
     register: registerLogin,
     handleSubmit: handleSubmitLogin,
@@ -53,7 +52,6 @@ export default function AuthPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  // Signup form
   const {
     register: registerSignup,
     handleSubmit: handleSubmitSignup,
@@ -61,48 +59,87 @@ export default function AuthPage() {
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
   });
+  
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
 
   const onLoginSubmit: SubmitHandler<LoginFormData> = async (data) => {
+    setIsLoading(true);
+    setAuthError(null);
+    
     try {
-        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8091";
-        
-        const response = await fetch(`${API_URL}/api/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          credentials: "include", // 👈 Send cookies (if using sessions/authentication)
-        });
-    
-        if (!response.ok) {
-          const errorData = await response.json();
-          alert(errorData.message || "Login failed");
-          return;
-        }
-    
-        router.push("/");
-      } catch (error) {
-        console.error("Login error:", error);
-        alert("An error occurred. Please try again.");
+      // Use the auth context login method instead of direct fetch
+      const success = await login(data.username, data.password);
+      
+      if (success) {
+        router.push("/dashboard");
+      } else {
+        setAuthError("Login failed. Please check your credentials and try again.");
       }
+    } catch (error) {
+      console.error("Login error:", error);
+      setAuthError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormData> = async (data) => {
+    setIsLoading(true);
+    setAuthError(null);
+    
     try {
-      const response = await fetch("/api/signup", {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8091";
+      
+      // First, register the user with your backend
+      const response = await fetch(`${API_URL}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          username: data.username,
+          email: data.email,
+          password: data.password,
+          name: data.name,
+          birthday: data.birthday,
+          accountType: data.accountType
+        }),
+        credentials: "include",
       });
 
       if (!response.ok) {
-        alert("Sign up failed");
+        const errorData = await response.json();
+        setAuthError(errorData.message || "Registration failed. Please try again.");
         return;
       }
-      router.push("/dashboard");
-    } catch {
-      alert("An error occurred. Please try again.");
+      
+      // If registration is successful, log the user in automatically
+      const loginSuccess = await login(data.username, data.password);
+      
+      if (loginSuccess) {
+        router.push("/dashboard");
+      } else {
+        setAuthError("Registration was successful but login failed. Please try logging in manually.");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      setAuthError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  // If redirecting, show minimal loading UI
+  if (isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-white text-xl">Redirecting to dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -128,6 +165,13 @@ export default function AuthPage() {
         </div>
       </div>
 
+      {/* Error message display */}
+      {authError && (
+        <div className="bg-red-500 text-white p-3 rounded-md mb-4 text-center max-w-lg mx-auto">
+          {authError}
+        </div>
+      )}
+
       {/* Login Form */}
       {authMode === "login" && (
         <>
@@ -142,18 +186,12 @@ export default function AuthPage() {
 
           {/* Email & Password Form */}
           <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="space-y-4 mx-auto w-full max-w-lg">
-            {/* <Input
-              label="Email"
-              type="email"
-              registration={registerLogin("email")}
-              error={loginErrors.email?.message}
-              placeholder="Enter your email"
-            /> */}
             <Input
               label="Username"
               registration={registerLogin("username")}
-              error={signupErrors.username?.message}
+              error={loginErrors.username?.message}
               placeholder="Enter your username"
+              disabled={isLoading}
             />
 
             <Input
@@ -162,6 +200,7 @@ export default function AuthPage() {
               registration={registerLogin("password")}
               error={loginErrors.password?.message}
               placeholder="Enter your password"
+              disabled={isLoading}
               className=""
             />
             <div className="text-right">
@@ -170,18 +209,21 @@ export default function AuthPage() {
                 </a>
             </div>
 
-            <Button type="submit" className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2">
-              Login
+            <Button 
+              type="submit" 
+              className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2"
+              disabled={isLoading}
+            >
+              {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
-
-          
 
           <div className="mt-4 text-center">
             <span className="text-white">Dont have an account?</span>{" "}
             <button
               onClick={() => setAuthMode("signup")}
               className="text-yellow-300 hover:underline"
+              disabled={isLoading}
             >
               Sign up
             </button>
@@ -209,6 +251,7 @@ export default function AuthPage() {
               type="date"
               registration={registerSignup("birthday")}
               error={signupErrors.birthday?.message}
+              disabled={isLoading}
             />
 
             {/* Account Type */}
@@ -222,6 +265,7 @@ export default function AuthPage() {
                 { value: "teacher", label: "Teacher" },
                 { value: "other", label: "Other" },
               ]}
+              disabled={isLoading}
             />
 
             {/* Name */}
@@ -230,6 +274,7 @@ export default function AuthPage() {
               registration={registerSignup("name")}
               error={signupErrors.name?.message}
               placeholder="Full name"
+              disabled={isLoading}
             />
 
             {/* Username */}
@@ -238,6 +283,7 @@ export default function AuthPage() {
               registration={registerSignup("username")}
               error={signupErrors.username?.message}
               placeholder="Create a username"
+              disabled={isLoading}
             />
 
             {/* Email */}
@@ -247,6 +293,7 @@ export default function AuthPage() {
               registration={registerSignup("email")}
               error={signupErrors.email?.message}
               placeholder="Enter your email"
+              disabled={isLoading}
             />
 
             {/* Password */}
@@ -256,10 +303,15 @@ export default function AuthPage() {
               registration={registerSignup("password")}
               error={signupErrors.password?.message}
               placeholder="Enter your password"
+              disabled={isLoading}
             />
 
-            <Button type="submit" className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2">
-              Sign Up
+            <Button 
+              type="submit" 
+              className="w-full mt-4 bg-primaryCustome rounded-full hover:bg-primaryHover font-bold py-2"
+              disabled={isLoading}
+            >
+              {isLoading ? "Creating account..." : "Sign Up"}
             </Button>
           </form>
 
@@ -267,7 +319,8 @@ export default function AuthPage() {
             <span className="text-gray-400">Already have an account?</span>{" "}
             <button
               onClick={() => setAuthMode("login")}
-              className="text-[#00D1C0] hover:underline "
+              className="text-[#00D1C0] hover:underline"
+              disabled={isLoading}
             >
               Sign in
             </button>

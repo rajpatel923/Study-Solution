@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.util.List;
@@ -22,4 +23,7 @@ public class User {
     private String email;
     private List<String> roles;
     private boolean enabled;
+
+    private String refreshToken;
+    private String refreshTokenExpiryDate;
 }
