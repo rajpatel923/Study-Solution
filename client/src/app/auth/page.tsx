@@ -10,7 +10,7 @@ import { useAuth } from "@/common/auth/AuthContext";
 
 import Input from "@/components/ui/customeInput";
 import { Button } from "@/components/ui/button";
-import Select from "@/components/ui/select";
+import {Select} from "@/components/ui/select";
 import SocialAuthButtons from "@/components/common/auth/socialAuthButton";
 
 // Login schema

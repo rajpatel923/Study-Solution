@@ -1,0 +1,129 @@
+/* styles/editor.css */
+.ProseMirror {
+  min-height: 500px;
+  padding: 1rem;
+  outline: none;
+}
+
+/* Heading styles */
+.ProseMirror h1 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.75rem;
+  font-weight: bold;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.ProseMirror h4 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* List styles */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror ul {
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+
+/* Nested lists */
+.ProseMirror ul ul,
+.ProseMirror ol ol,
+.ProseMirror ul ol,
+.ProseMirror ol ul {
+  margin: 0.25rem 0;
+}
+
+/* Bold and italic */
+.ProseMirror strong {
+  font-weight: bold;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+/* Code blocks */
+.ProseMirror pre {
+  background-color: #f5f5f5;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  font-family: monospace;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+/* Inline code */
+.ProseMirror code {
+  background-color: #f5f5f5;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.875em;
+}
+
+/* Blockquotes */
+.ProseMirror blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1rem;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+
+/* Tables */
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+
+.ProseMirror th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  text-align: left;
+  padding: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.ProseMirror td {
+  padding: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+/* Links */
+.ProseMirror a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.ProseMirror a:hover {
+  text-decoration: none;
+}
+
+/* Paragraph spacing */
+.ProseMirror p {
+  margin: 0.5rem 0;
+}

@@ -87,11 +87,13 @@ public class AuthService {
         return userRepository.findByUsername(request.getUsername())
                 .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
                 .flatMap(user -> {
-                    // Generate tokens
+                    // Generate new access token
                     String accessToken = jwtUtil.generateAccessToken(user);
 
                     // Check if the existing refresh token is still valid
                     if (isRefreshTokenValid(user)) {
+                        log.info("Reusing existing valid refresh token for user: {}", user.getUsername());
+
                         // Reuse existing refresh token
                         return Mono.just(TokenResponse.builder()
                                 .accessToken(accessToken)
@@ -101,7 +103,7 @@ public class AuthService {
                                 .build());
                     }
 
-                    // Calculate and format expiry time
+                    // Generate new refresh token only if needed
                     String refreshToken = jwtUtil.generateRefreshToken(user);
                     String expiryTime = calculateExpiryTime(jwtUtil.getRefreshTokenExpiration());
 
@@ -109,7 +111,8 @@ public class AuthService {
                     user.setRefreshToken(refreshToken);
                     user.setRefreshTokenExpiryDate(expiryTime);
 
-                    log.info("Created refresh token on login for user: {}, expires: {}", user.getUsername(), expiryTime);
+                    log.info("Created new refresh token on login for user: {}, expires: {}",
+                            user.getUsername(), expiryTime);
 
                     // Save updated user
                     return userRepository.save(user)
@@ -143,6 +146,7 @@ public class AuthService {
 
         // Use enhanced validation with logging
         if (!validateTokenWithLogging(refreshToken)) {
+            log.error("Invalid refresh token format or signature");
             return Mono.error(new RuntimeException("Invalid refresh token"));
         }
 
@@ -159,8 +163,10 @@ public class AuthService {
                     return valid;
                 })
                 .flatMap(user -> {
-                    // Generate new tokens
+                    // Generate new access token
                     String newAccessToken = jwtUtil.generateAccessToken(user);
+
+                    // Generate new refresh token
                     String newRefreshToken = jwtUtil.generateRefreshToken(user);
 
                     // Calculate and format new expiry time
@@ -186,7 +192,6 @@ public class AuthService {
                     return Mono.error(new RuntimeException("Invalid refresh token or token expired"));
                 }));
     }
-
 
     /**
      * Logout user by invalidating refresh token

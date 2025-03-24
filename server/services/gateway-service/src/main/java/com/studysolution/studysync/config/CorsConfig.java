@@ -12,22 +12,16 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
     @Bean
-    public CorsWebFilter corsWebFilter() {
+    public CorsWebFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        // Specify the allowed origin (the address of your frontend)
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
-
-        // Allowed methods
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-
-        // Allowed headers
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization"));
-
-        // MUST be true if you want to include cookies or credentials
         config.setAllowCredentials(true);
+        config.addAllowedOrigin("http://localhost:3000");
+        config.addAllowedHeader("*");
+        config.addAllowedMethod("*");
+        config.setMaxAge(3600L);
 
-        // Create the source and register your CORS configuration
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource source =
+                new org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return new CorsWebFilter(source);

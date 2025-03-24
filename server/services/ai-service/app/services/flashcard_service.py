@@ -3,14 +3,14 @@ from langchain.chains import LLMChain
 from langchain_openai import ChatOpenAI
 from langchain_ollama.llms import OllamaLLM
 from langchain.prompts import PromptTemplate
-from app.utils.pdf_utils import load_pdf_from_url
+from app.utils.content_loader import load_content, detect_content_type
 from app.utils.db_utils import get_mongodb_client
 from bson import ObjectId
 import os
-import datetime
-import json
 import re
-from typing import List, Dict, Any, Optional
+import json
+import datetime
+from typing import List, Dict, Any, Optional, Tuple
 
 
 def get_flashcard_by_id(flashcard_id: str) -> dict:
@@ -39,6 +39,12 @@ def get_flashcard_by_id(flashcard_id: str) -> dict:
         # Convert ObjectId to string for JSON serialization
         flashcard["_id"] = str(flashcard["_id"])
         flashcard["document_id"] = str(flashcard["document_id"])
+
+        # Convert datetime objects to ISO strings
+        if flashcard.get("created_at"):
+            flashcard["created_at"] = flashcard["created_at"].isoformat()
+        if flashcard.get("last_reviewed"):
+            flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
 
         return {
             "status": "success",
@@ -181,6 +187,76 @@ def get_flashcards_by_document(document_id: str, user_id: str) -> dict:
         }
 
 
+def update_flashcard(flashcard_id: str, update_data: Any) -> dict:
+    """
+    Updates an existing flashcard with new data.
+
+    Args:
+        flashcard_id: The flashcard ID
+        update_data: Object containing fields to update
+
+    Returns:
+        dict: Success or error information
+    """
+    try:
+        db_client = get_mongodb_client()
+        db = db_client["ai_service"]
+        flashcards_collection = db["flashcards"]
+
+        # Build update document
+        update_doc = {"last_updated": datetime.datetime.utcnow()}
+
+        if update_data.front_text is not None:
+            update_doc["front_text"] = update_data.front_text
+
+        if update_data.back_text is not None:
+            update_doc["back_text"] = update_data.back_text
+
+        if update_data.difficulty is not None:
+            update_doc["difficulty"] = update_data.difficulty
+
+        if update_data.category is not None:
+            update_doc["category"] = update_data.category
+
+        if update_data.tags is not None:
+            update_doc["tags"] = update_data.tags
+
+        # Update the document
+        result = flashcards_collection.update_one(
+            {"_id": ObjectId(flashcard_id)},
+            {"$set": update_doc}
+        )
+
+        if result.modified_count == 0:
+            return {
+                "status": "error",
+                "message": "No changes made to the flashcard"
+            }
+
+        # Get the updated flashcard
+        updated_flashcard = get_flashcard_by_id(flashcard_id)
+
+        if updated_flashcard["status"] == "error":
+            return {
+                "status": "error",
+                "message": "Failed to retrieve updated flashcard"
+            }
+
+        return {
+            "status": "success",
+            "message": "Flashcard updated successfully",
+            "flashcard": updated_flashcard["flashcard"]
+        }
+
+    except Exception as e:
+        error_message = f"Error updating flashcard: {str(e)}"
+        print(error_message)
+        return {
+            "status": "error",
+            "message": error_message
+        }
+
+
 def update_flashcard_review_status(flashcard_id: str, confidence_level: int) -> dict:
     """
     Updates a flashcard's review status after the user has reviewed it.
@@ -271,104 +347,9 @@ def delete_flashcard(flashcard_id: str) -> dict:
         }
 
 
-def split_into_chunks(documents: List[Any],
-                      chunk_size: int = 1500,
-                      chunk_overlap: int = 200) -> List[Any]:
-    """
-    Splits documents into smaller chunks suitable for LLM processing.
-
-    Args:
-        documents: List of document objects from load_pdf_from_url
-        chunk_size: Maximum size of each chunk in characters
-        chunk_overlap: Overlap between chunks in characters
-
-    Returns:
-        List of document chunks
-    """
-    # Initialize text splitter with appropriate parameters
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ". ", " ", ""]
-    )
-
-    # Split documents into chunks
-    return text_splitter.split_documents(documents)
-
-
-def extract_json_from_llm_response(response: str) -> List[Dict]:
-    """
-    Extracts JSON data from LLM response text, handling possible formatting issues.
-
-    Args:
-        response: The raw response from the LLM
-
-    Returns:
-        List of dictionaries containing flashcard data
-    """
-    # Try to find JSON array in the response
-    json_pattern = r'\[\s*\{.*\}\s*\]'
-    json_match = re.search(json_pattern, response, re.DOTALL)
-
-    if json_match:
-        try:
-            return json.loads(json_match.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    # If not found or invalid, look for individual JSON objects
-    json_objects = []
-    object_pattern = r'\{\s*"front".*?"back".*?\}'
-    matches = re.finditer(object_pattern, response, re.DOTALL)
-
-    for match in matches:
-        try:
-            obj = json.loads(match.group(0))
-            json_objects.append(obj)
-        except json.JSONDecodeError:
-            continue
-
-    # If we found objects individually, return them
-    if json_objects:
-        return json_objects
-
-    # Last resort: try to manually parse key-value pairs
-    flashcards = []
-    sections = response.split('\n\n')
-    current_card = {}
-
-    for section in sections:
-        if 'front:' in section.lower() or 'front text:' in section.lower():
-            # Start a new card
-            if current_card and 'front' in current_card and 'back' in current_card:
-                flashcards.append(current_card)
-            current_card = {}
-
-            lines = section.split('\n')
-            for line in lines:
-                if ':' in line:
-                    key, value = line.split(':', 1)
-                    key = key.strip().lower()
-                    value = value.strip()
-
-                    if 'front' in key:
-                        current_card['front'] = value
-                    elif 'back' in key:
-                        current_card['back'] = value
-                    elif 'difficulty' in key:
-                        current_card['difficulty'] = value
-                    elif 'category' in key or 'tag' in key:
-                        current_card['category'] = value
-
-    # Add the last card if it exists
-    if current_card and 'front' in current_card and 'back' in current_card:
-        flashcards.append(current_card)
-
-    return flashcards
-
-
 def generate_flashcards_from_chunk(chunk: Any,
                                    llm: Any,
+                                   content_type: str,
                                    difficulty_level: str = "mixed",
                                    focus_areas: List[str] = None,
                                    target_count: int = 5) -> List[Dict]:
@@ -378,6 +359,7 @@ def generate_flashcards_from_chunk(chunk: Any,
     Args:
         chunk: A document chunk
         llm: Language model
+        content_type: Type of content ('pdf', 'youtube', etc.)
         difficulty_level: Desired difficulty level
         focus_areas: List of areas to focus on
         target_count: Number of flashcards to generate from this chunk
@@ -385,7 +367,7 @@ def generate_flashcards_from_chunk(chunk: Any,
     Returns:
         List of dictionaries with flashcard data
     """
-    # Create the prompt template for flashcard generation
+    # Create difficulty instruction based on level
     difficulty_instruction = ""
     if difficulty_level == "easy":
         difficulty_instruction = "Create easy flashcards focusing on basic concepts and definitions."
@@ -396,40 +378,15 @@ def generate_flashcards_from_chunk(chunk: Any,
     elif difficulty_level == "mixed":
         difficulty_instruction = "Create a mix of easy, medium, and hard flashcards."
 
+    # Create focus instruction if focus areas provided
     focus_instruction = ""
     if focus_areas and len(focus_areas) > 0:
         focus_instruction = f"Focus on these areas: {', '.join(focus_areas)}."
 
-    prompt_template = """
-    You are an expert educator creating high-quality flashcards for students. 
-    Create {target_count} flashcards from the following text content.
+    # Get content-specific prompt
+    prompt_template = get_content_specific_prompt(content_type)
 
-    {difficulty_instruction}
-    {focus_instruction}
-
-    For each flashcard:
-    1. The front should contain a clear, concise question
-    2. The back should contain a comprehensive answer
-    3. Assign a difficulty level ("easy", "medium", "hard")
-    4. Assign a category/tag that describes the flashcard content
-
-    Return the flashcards in this JSON format:
-    [
-      {{
-        "front": "Question on front of card",
-        "back": "Answer on back of card",
-        "difficulty": "medium",
-        "category": "topic"
-      }},
-      ...
-    ]
-
-    TEXT CONTENT:
-    {text}
-
-    FLASHCARDS (JSON format):
-    """
-
+    # Create the prompt
     prompt = PromptTemplate(
         input_variables=["text", "difficulty_instruction", "focus_instruction", "target_count"],
         template=prompt_template
@@ -453,205 +410,32 @@ def generate_flashcards_from_chunk(chunk: Any,
             if not isinstance(card, dict):
                 continue
 
+            # Initialize metadata if not present
+            if not card.get("metadata"):
+                card["metadata"] = {}
+
+            # Add source information
+            source = chunk.metadata.get("source")
+            if source:
+                card["metadata"]["source"] = source
+
             # Get page number from metadata if available
             page_number = chunk.metadata.get("page_num")
             if page_number:
-                if not card.get("metadata"):
-                    card["metadata"] = {}
                 card["metadata"]["page_number"] = page_number
+
+            # For YouTube content, add timestamp if available
+            if content_type == 'youtube' and chunk.metadata.get("start_time"):
+                card["metadata"]["start_time"] = chunk.metadata.get("start_time")
+
+            # For PowerPoint, add slide number if available
+            if content_type == 'powerpoint' and chunk.metadata.get("slide_number"):
+                card["metadata"]["slide_number"] = chunk.metadata.get("slide_number")
 
         return flashcards
     except Exception as e:
         print(f"Error parsing flashcards: {str(e)}")
         return []
-
-
-def create_flashcards_from_pdf(
-        pdf_url: str,
-        user_id: str,
-        difficulty_level: str = "mixed",
-        tag_categories: List[str] = None,
-        focus_areas: List[str] = None,
-        card_count: int = 20,
-        include_images: bool = False
-) -> dict:
-    """
-    Generates flashcards from a PDF document, optimized for effective learning.
-
-    Args:
-        pdf_url: URL of the PDF document
-        user_id: Identifier for the user requesting the flashcards
-        difficulty_level: Desired difficulty level ("easy", "medium", "hard", or "mixed")
-        tag_categories: Optional list of categories to organize flashcards
-        focus_areas: Optional list of topics to focus on when generating flashcards
-        card_count: Target number of flashcards to generate
-        include_images: Whether to include images in flashcards (currently not supported)
-
-    Returns:
-        dict: Dictionary containing flashcard data, status, and any error messages
-    """
-    try:
-        # 1. Load PDF from URL using utility function
-        documents = load_pdf_from_url(pdf_url)
-        if not documents:
-            return {
-                "status": "error",
-                "error_message": f"Failed to load PDF from URL: {pdf_url}. See logs for details."
-            }
-
-        # Extract document metadata
-        doc_metadata = {
-            "title": os.path.basename(pdf_url),
-            "url": pdf_url,
-            "page_count": len(documents),
-            "uploaded_at": datetime.datetime.utcnow()
-        }
-
-        # 2. Initialize Language Model
-        # Change model based on availability
-        # try:
-        #     llm = ChatOpenAI(
-        #         openai_api_key=os.environ.get("OPENAI_API_KEY"),
-        #         model_name="gpt-4o",  # or gpt-4 for higher quality
-        #         temperature=0.5
-        #     )
-        # except:
-            # Fallback to local model if OpenAI is not available
-        llm = OllamaLLM(
-            model="llama3.2-vision:latest",
-        )
-
-        # 3. Split text into manageable chunks
-        chunks = split_into_chunks(documents, chunk_size=2000, chunk_overlap=200)
-
-        # 4. Calculate cards per chunk based on document size
-        chunk_count = len(chunks)
-        if chunk_count == 0:
-            return {
-                "status": "error",
-                "error_message": "No content found in the PDF"
-            }
-
-        # Distribute cards per chunk, with a minimum of 2 cards per chunk
-        cards_per_chunk = max(2, min(5, card_count // chunk_count + 1))
-
-        # 5. Generate flashcards from each chunk
-        all_flashcards = []
-        progress_counter = 0
-
-        # Process each chunk to generate flashcards
-        for chunk in chunks:
-            # Skip chunks that are too small
-            if len(chunk.page_content.strip()) < 100:
-                continue
-
-            # Generate flashcards from this chunk
-            chunk_cards = generate_flashcards_from_chunk(
-                chunk=chunk,
-                llm=llm,
-                difficulty_level=difficulty_level,
-                focus_areas=focus_areas,
-                target_count=cards_per_chunk
-            )
-
-            # Add cards to the collection
-            all_flashcards.extend(chunk_cards)
-            progress_counter += 1
-
-
-            # If we have enough cards, stop generating
-            if len(all_flashcards) >= card_count:
-                break
-
-        # 6. Apply advanced learning techniques to enhance flashcards
-        enhanced_flashcards = enhance_flashcards_with_learning_techniques(all_flashcards, llm)
-
-        # 7. Store document info in MongoDB
-        db_client = get_mongodb_client()
-        db = db_client["ai_service"]
-
-        # Store document info if not already in DB
-        docs_collection = db["documents"]
-        existing_doc = docs_collection.find_one({"url": pdf_url})
-
-        if existing_doc:
-            document_id = existing_doc["_id"]
-        else:
-            document_result = docs_collection.insert_one(doc_metadata)
-            document_id = document_result.inserted_id
-
-        # 8. Create flashcard set
-        flashcard_set_data = {
-            "user_id": user_id,
-            "document_id": document_id,
-            "title": f"Flashcards: {os.path.basename(pdf_url)}",
-            "description": f"Created from {pdf_url}",
-            "flashcard_count": len(enhanced_flashcards),
-            "created_at": datetime.datetime.utcnow(),
-            "tags": tag_categories or []
-        }
-
-        # Insert flashcard set into MongoDB
-        sets_collection = db["flashcard_sets"]
-        set_result = sets_collection.insert_one(flashcard_set_data)
-        flashcard_set_id = set_result.inserted_id
-
-        # 9. Store flashcards in MongoDB
-        flashcards_collection = db["flashcards"]
-        stored_flashcards = []
-
-        for card in enhanced_flashcards:
-            # Skip invalid cards
-            if not isinstance(card, dict) or not card.get("front") or not card.get("back"):
-                continue
-
-            # Format the flashcard for storage
-            flashcard_data = {
-                "user_id": user_id,
-                "document_id": document_id,
-                "front_text": card["front"],
-                "back_text": card["back"],
-                "difficulty": card.get("difficulty", "medium"),
-                "category": card.get("category", "general"),
-                "tags": tag_categories or [],
-                "created_at": datetime.datetime.utcnow(),
-                "review_count": 0,
-                "confidence_level": 0,
-                "metadata": card.get("metadata", {})
-            }
-
-            # Insert flashcard
-            result = flashcards_collection.insert_one(flashcard_data)
-
-            # Add to stored flashcards
-            flashcard_data["_id"] = str(result.inserted_id)
-            stored_flashcards.append(flashcard_data)
-
-        # Prepare sample flashcards for the response
-        sample_size = min(5, len(stored_flashcards))
-        sample_flashcards = []
-
-        for i in range(sample_size):
-            sample_flashcards.append({
-                "front": stored_flashcards[i]["front_text"],
-                "back": stored_flashcards[i]["back_text"]
-            })
-
-        return {
-            "status": "success",
-            "flashcard_set_id": str(flashcard_set_id),
-            "document_id": str(document_id),
-            "flashcard_count": len(stored_flashcards),
-            "sample_flashcards": sample_flashcards
-        }
-
-    except Exception as e:
-        error_message = f"Error generating flashcards: {str(e)}"
-        print(error_message)
-        return {
-            "status": "error",
-            "error_message": error_message
-        }
 
 
 def enhance_flashcards_with_learning_techniques(all_flashcards: List[Dict], llm: Any) -> List[Dict]:
@@ -747,3 +531,474 @@ def enhance_flashcards_with_learning_techniques(all_flashcards: List[Dict], llm:
         print(f"Error enhancing flashcards: {str(e)}")
         # If enhancement fails, return original flashcards
         return all_flashcards
+
+
+def create_flashcards_from_content(
+        content_url: str,
+        user_id: str,
+        difficulty_level: str = "mixed",
+        tags: List[str] = None,
+        focus_areas: List[str] = None,
+        card_count: int = 20,
+        content_type: str = None
+) -> dict:
+    """
+    Generates flashcards from any content type, optimized for effective learning.
+
+    Args:
+        content_url: URL of the content (PDF, YouTube, PowerPoint, etc.)
+        user_id: Identifier for the user requesting the flashcards
+        difficulty_level: Desired difficulty level ("easy", "medium", "hard", or "mixed")
+        tags: Optional list of tags to organize flashcards
+        focus_areas: Optional list of topics to focus on when generating flashcards
+        card_count: Target number of flashcards to generate
+        content_type: Type of content. If None, will be auto-detected
+
+    Returns:
+        dict: Dictionary containing flashcard data, status, and any error messages
+    """
+    try:
+        # 1. Auto-detect content type if not provided
+        if not content_type:
+            content_type = detect_content_type(content_url)
+            print(f"Auto-detected content type: {content_type}")
+
+        # 2. Load content from URL using the appropriate loader
+        documents = load_content(content_url, content_type)
+        if not documents:
+            return {
+                "status": "error",
+                "error_message": f"Failed to load content from URL: {content_url}. See logs for details."
+            }
+
+        # Extract document metadata
+        doc_metadata = {
+            "title": documents[0].metadata.get("title", os.path.basename(content_url)),
+            "url": content_url,
+            "content_type": content_type,
+            "page_count": len(documents),
+            "uploaded_at": datetime.datetime.utcnow()
+        }
+
+        # 3. Initialize Language Model
+        # Try to use OpenAI first, fallback to local model if not available
+        try:
+            llm = ChatOpenAI(
+                openai_api_key=os.environ.get("OPENAI_API_KEY"),
+                model_name="gpt-4o",  # or gpt-4 for higher quality
+                temperature=0.5
+            )
+        except:
+            # Fallback to local model if OpenAI is not available
+            llm = OllamaLLM(
+                model="llama3.2-vision:latest",
+            )
+
+        # 4. Split text into manageable chunks
+        chunks = split_into_chunks(documents, chunk_size=2000, chunk_overlap=200)
+
+        # Skip empty or very short documents
+        chunks = [chunk for chunk in chunks if len(chunk.page_content.strip()) > 100]
+
+        # 5. Calculate cards per chunk based on document size
+        chunk_count = len(chunks)
+        if chunk_count == 0:
+            return {
+                "status": "error",
+                "error_message": "No usable content found in the document"
+            }
+
+        # Distribute cards per chunk, with a minimum of 2 cards per chunk
+        cards_per_chunk = max(2, min(5, card_count // chunk_count + 1))
+
+        # 6. Generate flashcards from each chunk
+        all_flashcards = []
+        progress_counter = 0
+
+        # Process each chunk to generate flashcards
+        for chunk in chunks:
+            # Generate flashcards from this chunk
+            chunk_cards = generate_flashcards_from_chunk(
+                chunk=chunk,
+                llm=llm,
+                content_type=content_type,
+                difficulty_level=difficulty_level,
+                focus_areas=focus_areas,
+                target_count=cards_per_chunk
+            )
+
+            # Add cards to the collection
+            all_flashcards.extend(chunk_cards)
+            progress_counter += 1
+
+            # If we have enough cards, stop generating
+            if len(all_flashcards) >= card_count:
+                break
+
+        # 7. Apply advanced learning techniques to enhance flashcards
+        enhanced_flashcards = enhance_flashcards_with_learning_techniques(all_flashcards, llm)
+
+        # 8. Store document info in MongoDB
+        db_client = get_mongodb_client()
+        db = db_client["ai_service"]
+
+        # Store document info if not already in DB
+        docs_collection = db["documents"]
+        existing_doc = docs_collection.find_one({"url": content_url})
+
+        if existing_doc:
+            document_id = existing_doc["_id"]
+        else:
+            document_result = docs_collection.insert_one(doc_metadata)
+            document_id = document_result.inserted_id
+
+        # 9. Create flashcard set
+        title_base = os.path.basename(content_url)
+        if content_type == 'youtube':
+            # Try to get a better title for YouTube videos
+            if documents and documents[0].metadata.get("title"):
+                title_base = documents[0].metadata.get("title")
+
+        flashcard_set_data = {
+            "user_id": user_id,
+            "document_id": document_id,
+            "title": f"Flashcards: {title_base}",
+            "description": f"Created from {content_url}",
+            "flashcard_count": len(enhanced_flashcards),
+            "created_at": datetime.datetime.utcnow(),
+            "tags": tags or [],
+            "content_type": content_type
+        }
+
+        # Insert flashcard set into MongoDB
+        sets_collection = db["flashcard_sets"]
+        set_result = sets_collection.insert_one(flashcard_set_data)
+        flashcard_set_id = set_result.inserted_id
+
+        # 10. Store flashcards in MongoDB
+        flashcards_collection = db["flashcards"]
+        stored_flashcards = []
+
+        for card in enhanced_flashcards:
+            # Skip invalid cards
+            if not isinstance(card, dict) or not card.get("front") or not card.get("back"):
+                continue
+
+            # Format the flashcard for storage
+            flashcard_data = {
+                "user_id": user_id,
+                "document_id": document_id,
+                "front_text": card["front"],
+                "back_text": card["back"],
+                "difficulty": card.get("difficulty", "medium"),
+                "category": card.get("category", "general"),
+                "tags": tags or [],
+                "created_at": datetime.datetime.utcnow(),
+                "review_count": 0,
+                "confidence_level": 0,
+                "metadata": card.get("metadata", {}),
+                "content_type": content_type
+            }
+
+            # Insert flashcard
+            result = flashcards_collection.insert_one(flashcard_data)
+
+            # Add to stored flashcards
+            flashcard_data["_id"] = str(result.inserted_id)
+            stored_flashcards.append(flashcard_data)
+
+        # Prepare sample flashcards for the response
+        sample_size = min(5, len(stored_flashcards))
+        sample_flashcards = []
+
+        for i in range(sample_size):
+            sample_flashcards.append({
+                "front": stored_flashcards[i]["front_text"],
+                "back": stored_flashcards[i]["back_text"]
+            })
+
+        return {
+            "status": "success",
+            "flashcard_set_id": str(flashcard_set_id),
+            "document_id": str(document_id),
+            "flashcard_count": len(stored_flashcards),
+            "sample_flashcards": sample_flashcards,
+            "content_type": content_type
+        }
+
+    except Exception as e:
+        error_message = f"Error generating flashcards: {str(e)}"
+        print(error_message)
+        return {
+            "status": "error",
+            "error_message": error_message
+        }
+
+
+def split_into_chunks(documents: List[Any],
+                      chunk_size: int = 1500,
+                      chunk_overlap: int = 200) -> List[Any]:
+    """
+    Splits documents into smaller chunks suitable for LLM processing.
+
+    Args:
+        documents: List of document objects from content loader
+        chunk_size: Maximum size of each chunk in characters
+        chunk_overlap: Overlap between chunks in characters
+
+    Returns:
+        List of document chunks
+    """
+    # Initialize text splitter with appropriate parameters
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+
+    # Split documents into chunks
+    return text_splitter.split_documents(documents)
+
+
+def extract_json_from_llm_response(response: str) -> List[Dict]:
+    """
+    Extracts JSON data from LLM response text, handling possible formatting issues.
+
+    Args:
+        response: The raw response from the LLM
+
+    Returns:
+        List of dictionaries containing flashcard data
+    """
+    # Try to find JSON array in the response
+    json_pattern = r'\[\s*\{.*\}\s*\]'
+    json_match = re.search(json_pattern, response, re.DOTALL)
+
+    if json_match:
+        try:
+            return json.loads(json_match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    # If not found or invalid, look for individual JSON objects
+    json_objects = []
+    object_pattern = r'\{\s*"front".*?"back".*?\}'
+    matches = re.finditer(object_pattern, response, re.DOTALL)
+
+    for match in matches:
+        try:
+            obj = json.loads(match.group(0))
+            json_objects.append(obj)
+        except json.JSONDecodeError:
+            continue
+
+    # If we found objects individually, return them
+    if json_objects:
+        return json_objects
+
+    # Last resort: try to manually parse key-value pairs
+    flashcards = []
+    sections = response.split('\n\n')
+    current_card = {}
+
+    for section in sections:
+        if 'front:' in section.lower() or 'front text:' in section.lower():
+            # Start a new card
+            if current_card and 'front' in current_card and 'back' in current_card:
+                flashcards.append(current_card)
+            current_card = {}
+
+            lines = section.split('\n')
+            for line in lines:
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip().lower()
+                    value = value.strip()
+
+                    if 'front' in key:
+                        current_card['front'] = value
+                    elif 'back' in key:
+                        current_card['back'] = value
+                    elif 'difficulty' in key:
+                        current_card['difficulty'] = value
+                    elif 'category' in key or 'tag' in key:
+                        current_card['category'] = value
+
+    # Add the last card if it exists
+    if current_card and 'front' in current_card and 'back' in current_card:
+        flashcards.append(current_card)
+
+    return flashcards
+
+
+def get_content_specific_prompt(content_type: str) -> str:
+    """
+    Returns content-specific prompt templates based on the content type
+
+    Args:
+        content_type: The type of content ('pdf', 'youtube', etc.)
+
+    Returns:
+        str: Flashcard generation prompt template
+    """
+    # Base prompt template
+    base_template = """
+    You are an expert educator creating high-quality flashcards for students. 
+    Create {target_count} flashcards from the following text content.
+
+    {difficulty_instruction}
+    {focus_instruction}
+
+    For each flashcard:
+    1. The front should contain a clear, concise question
+    2. The back should contain a comprehensive answer
+    3. Assign a difficulty level ("easy", "medium", "hard")
+    4. Assign a category/tag that describes the flashcard content
+
+    Return the flashcards in this JSON format:
+    [
+      {{
+        "front": "Question on front of card",
+        "back": "Answer on back of card",
+        "difficulty": "medium",
+        "category": "topic"
+      }},
+      ...
+    ]
+
+    TEXT CONTENT:
+    {text}
+
+    FLASHCARDS (JSON format):
+    """
+
+    # YouTube-specific prompt
+    if content_type == 'youtube':
+        return """
+        You are an expert educator creating high-quality flashcards for students learning from video content. 
+        Create {target_count} flashcards from the following video transcript.
+
+        {difficulty_instruction}
+        {focus_instruction}
+
+        For each flashcard:
+        1. The front should contain a clear, concise question about a key concept from the video
+        2. The back should contain a comprehensive answer that captures the explanation from the video
+        3. Assign a difficulty level ("easy", "medium", "hard")
+        4. Assign a category/tag that describes the core topic
+
+        Return the flashcards in this JSON format:
+        [
+          {{
+            "front": "Question on front of card",
+            "back": "Answer on back of card",
+            "difficulty": "medium",
+            "category": "topic"
+          }},
+          ...
+        ]
+
+        VIDEO TRANSCRIPT:
+        {text}
+
+        FLASHCARDS (JSON format):
+        """
+
+    # PowerPoint-specific prompt
+    elif content_type == 'powerpoint':
+        return """
+        You are an expert educator creating high-quality flashcards for students learning from presentation slides. 
+        Create {target_count} flashcards from the following slide content.
+
+        {difficulty_instruction}
+        {focus_instruction}
+
+        For each flashcard:
+        1. The front should contain a clear, concise question about a key concept from the slides
+        2. The back should contain a comprehensive answer that captures the explanation from the slides
+        3. Assign a difficulty level ("easy", "medium", "hard")
+        4. Assign a category/tag that describes the core topic
+
+        Return the flashcards in this JSON format:
+        [
+          {{
+            "front": "Question on front of card",
+            "back": "Answer on back of card",
+            "difficulty": "medium",
+            "category": "topic"
+          }},
+          ...
+        ]
+
+        SLIDE CONTENT:
+        {text}
+
+        FLASHCARDS (JSON format):
+        """
+
+    # Handwritten notes-specific prompt
+    elif content_type == 'image':
+        return """
+        You are an expert educator creating high-quality flashcards for students learning from handwritten notes. 
+        Create {target_count} flashcards from the following handwritten notes content.
+
+        {difficulty_instruction}
+        {focus_instruction}
+
+        For each flashcard:
+        1. The front should contain a clear, concise question about a key concept from the notes
+        2. The back should contain a comprehensive answer that captures the explanation from the notes
+        3. Assign a difficulty level ("easy", "medium", "hard")
+        4. Assign a category/tag that describes the core topic
+
+        Return the flashcards in this JSON format:
+        [
+          {{
+            "front": "Question on front of card",
+            "back": "Answer on back of card",
+            "difficulty": "medium",
+            "category": "topic"
+          }},
+          ...
+        ]
+
+        NOTES CONTENT:
+        {text}
+
+        FLASHCARDS (JSON format):
+        """
+
+    # Webpage-specific prompt
+    elif content_type == 'webpage':
+        return """
+        You are an expert educator creating high-quality flashcards for students learning from web content. 
+        Create {target_count} flashcards from the following webpage content.
+
+        {difficulty_instruction}
+        {focus_instruction}
+
+        For each flashcard:
+        1. The front should contain a clear, concise question about a key concept from the webpage
+        2. The back should contain a comprehensive answer that captures the explanation from the webpage
+        3. Assign a difficulty level ("easy", "medium", "hard")
+        4. Assign a category/tag that describes the core topic
+
+        Return the flashcards in this JSON format:
+        [
+          {{
+            "front": "Question on front of card",
+            "back": "Answer on back of card",
+            "difficulty": "medium",
+            "category": "topic"
+          }},
+          ...
+        ]
+
+        WEBPAGE CONTENT:
+        {text}
+
+        FLASHCARDS (JSON format):
+        """
+
+    # Default to the base prompt for PDFs and other document types
+    return base_template

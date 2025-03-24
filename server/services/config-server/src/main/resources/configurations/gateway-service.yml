@@ -12,6 +12,12 @@ spring:
           uri: lb://user-profile-service
           filters:
             - StripPrefix=1
+        - id: document-uploader-service
+          predicates:
+            - Path=/documentservice/**
+          uri: lb://document-uploader-service
+          filters:
+            - StripPrefix=1
 
 
 

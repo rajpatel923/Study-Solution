@@ -38,21 +38,8 @@ public class AuthController {
         return authService.register(request)
                 .map(tokenResponse -> {
                     // Set cookies after registration
-                    ResponseCookie accessToken = ResponseCookie.from("accessToken", tokenResponse.getAccessToken())
-                            .httpOnly(true)
-                            .secure(true) // Consider setting to false for local development if not using HTTPS
-                            .path("/")
-                            .sameSite("Strict") // Improves security
-                            .maxAge(tokenResponse.getExpiresIn())
-                            .build();
-
-                    ResponseCookie refreshToken = ResponseCookie.from("refreshToken", tokenResponse.getRefreshToken())
-                            .httpOnly(true)
-                            .secure(true) // Consider setting to false for local development if not using HTTPS
-                            .path("/")
-                            .sameSite("Strict") // Improves security
-                            .maxAge(tokenResponse.getRefreshExpiresIn()) // Use the correct expiration time
-                            .build();
+                    ResponseCookie accessToken = createAccessTokenCookie(tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
+                    ResponseCookie refreshToken = createRefreshTokenCookie(tokenResponse.getRefreshToken(), tokenResponse.getRefreshExpiresIn());
 
                     exchange.getResponse().addCookie(accessToken);
                     exchange.getResponse().addCookie(refreshToken);
@@ -65,21 +52,12 @@ public class AuthController {
     public Mono<ResponseEntity<TokenResponse>> login(@RequestBody LoginRequest request, ServerWebExchange exchange) {
         return authService.login(request)
                 .map(tokenResponse -> {
-                    ResponseCookie accessToken = ResponseCookie.from("accessToken", tokenResponse.getAccessToken())
-                            .httpOnly(true)
-                            .secure(true)
-                            .path("/")
-                            .maxAge(tokenResponse.getExpiresIn())
-                            .build();
-                    ResponseCookie refreshToken = ResponseCookie.from("refreshToken", tokenResponse.getRefreshToken())
-                            .httpOnly(true)
-                            .secure(true)
-                            .path("/")
-                            .maxAge(tokenResponse.getRefreshExpiresIn()) // Refresh token lasts longer
-                            .build();
+                    ResponseCookie accessToken = createAccessTokenCookie(tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
+                    ResponseCookie refreshToken = createRefreshTokenCookie(tokenResponse.getRefreshToken(), tokenResponse.getRefreshExpiresIn());
 
                     exchange.getResponse().addCookie(accessToken);
                     exchange.getResponse().addCookie(refreshToken);
+
                     return ResponseEntity.ok(tokenResponse);
                 })
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
@@ -87,58 +65,51 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public Mono<ResponseEntity<TokenResponse>> refreshToken(ServerWebExchange exchange) {
-        // Get refresh token from cookie instead of header
+        // Get refresh token from cookie
         String refreshToken = getRefreshTokenFromCookie(exchange.getRequest());
+        log.debug("Refresh token from cookie: {}", refreshToken != null ? "present" : "not found");
 
         if (refreshToken != null) {
             return authService.refreshToken(refreshToken)
                     .map(tokenResponse -> {
                         // Set new cookies
-                        ResponseCookie accessToken = ResponseCookie.from("accessToken", tokenResponse.getAccessToken())
-                                .httpOnly(true)
-                                .secure(true)
-                                .path("/")
-                                .maxAge(tokenResponse.getExpiresIn())
-                                .build();
-                        ResponseCookie newRefreshToken = ResponseCookie.from("refreshToken", tokenResponse.getRefreshToken())
-                                .httpOnly(true)
-                                .secure(true)
-                                .path("/")
-                                .maxAge(tokenResponse.getExpiresIn() * 7) // Refresh token lasts longer
-                                .build();
+                        ResponseCookie accessToken = createAccessTokenCookie(tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
+                        ResponseCookie newRefreshToken = createRefreshTokenCookie(tokenResponse.getRefreshToken(), tokenResponse.getRefreshExpiresIn());
 
                         exchange.getResponse().addCookie(accessToken);
                         exchange.getResponse().addCookie(newRefreshToken);
+
                         return ResponseEntity.ok(tokenResponse);
                     })
-                    .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                    .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
+                    .onErrorResume(e -> {
+                        log.error("Error refreshing token: {}", e.getMessage());
+                        return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                    });
         }
 
         // Also check header for backward compatibility
         String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String tokenFromHeader = authHeader.substring(7);
+            log.debug("Using refresh token from Authorization header");
+
             return authService.refreshToken(tokenFromHeader)
                     .map(tokenResponse -> {
                         // Set new cookies
-                        ResponseCookie accessToken = ResponseCookie.from("accessToken", tokenResponse.getAccessToken())
-                                .httpOnly(true)
-                                .secure(true)
-                                .path("/")
-                                .maxAge(tokenResponse.getExpiresIn())
-                                .build();
-                        ResponseCookie newRefreshToken = ResponseCookie.from("refreshToken", tokenResponse.getRefreshToken())
-                                .httpOnly(true)
-                                .secure(true)
-                                .path("/")
-                                .maxAge(tokenResponse.getExpiresIn() * 7) // Refresh token lasts longer
-                                .build();
+                        ResponseCookie accessToken = createAccessTokenCookie(tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
+                        ResponseCookie newRefreshToken = createRefreshTokenCookie(tokenResponse.getRefreshToken(), tokenResponse.getRefreshExpiresIn());
 
                         exchange.getResponse().addCookie(accessToken);
                         exchange.getResponse().addCookie(newRefreshToken);
+
                         return ResponseEntity.ok(tokenResponse);
                     })
-                    .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                    .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build())
+                    .onErrorResume(e -> {
+                        log.error("Error refreshing token from header: {}", e.getMessage());
+                        return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+                    });
         }
 
         return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
@@ -149,13 +120,18 @@ public class AuthController {
         // Clear cookies first
         ResponseCookie clearAccessToken = ResponseCookie.from("accessToken", "")
                 .httpOnly(true)
-                .maxAge(0)
+                .secure(true)
                 .path("/")
+                .sameSite("Strict")
+                .maxAge(0)
                 .build();
+
         ResponseCookie clearRefreshToken = ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
-                .maxAge(0)
+                .secure(true)
                 .path("/")
+                .sameSite("Strict")
+                .maxAge(0)
                 .build();
 
         exchange.getResponse().addCookie(clearAccessToken);
@@ -292,7 +268,7 @@ public class AuthController {
     private ResponseCookie createAccessTokenCookie(String token, long maxAge) {
         return ResponseCookie.from("accessToken", token)
                 .httpOnly(true)
-                .secure(true) // Consider changing to false for local development
+                .secure(true) // Change to false for local development without HTTPS
                 .path("/")
                 .sameSite("Strict")
                 .maxAge(maxAge)
@@ -302,7 +278,7 @@ public class AuthController {
     private ResponseCookie createRefreshTokenCookie(String token, long maxAge) {
         return ResponseCookie.from("refreshToken", token)
                 .httpOnly(true)
-                .secure(true) // Consider changing to false for local development
+                .secure(true) // Change to false for local development without HTTPS
                 .path("/")
                 .sameSite("Strict")
                 .maxAge(maxAge)

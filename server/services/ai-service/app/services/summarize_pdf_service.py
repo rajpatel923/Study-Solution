@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 from langchain_ollama.llms import OllamaLLM
 
 from langchain.prompts import PromptTemplate
-from app.utils.pdf_utils import load_pdf_from_url
+from app.utils.pdf_utils import load_pdf_from_private_url
 from app.utils.db_utils import get_mongodb_client
 from bson import ObjectId
 import os
@@ -125,7 +125,8 @@ def split_into_chunks(documents: List[Any],
 def process_document_in_chunks(documents: List[Any],
                                chain: Any,
                                user_prompt: str = None,
-                               max_chunks_per_batch: int = 10, chain_type: str = "map_reduce") -> str:
+                               max_chunks_per_batch: int = 10,
+                               chain_type: str = "map_reduce") -> str:
     """
     Processes documents in manageable batches to avoid context length issues.
 
@@ -134,6 +135,7 @@ def process_document_in_chunks(documents: List[Any],
         chain: LangChain chain that's already been configured with the appropriate prompts
         user_prompt: User-provided prompt to guide summarization
         max_chunks_per_batch: Maximum number of chunks to process in a single batch
+        chain_type: Type of chain being used ("map_reduce" or "refine")
 
     Returns:
         Final summarized text
@@ -142,31 +144,31 @@ def process_document_in_chunks(documents: List[Any],
         return "No document content to process."
 
     default_prompt = "Provide a comprehensive academic summary"
+    prompt_to_use = user_prompt if user_prompt else default_prompt
 
     # For refine chain type, process chunks sequentially
     if chain_type == "refine":
         # Start with first chunk
-        current_summary = chain.invoke(
-            input_documents=[documents[0]],
-            user_prompt=user_prompt if user_prompt else default_prompt
-        )
+        current_summary = chain.invoke({
+            "input_documents": [documents[0]],
+            "user_prompt": prompt_to_use
+        })["output_text"]
 
         # Refine with subsequent chunks
         for i in range(1, len(documents)):
-            current_summary = chain.invoke(
-                input_documents=[documents[i]],
-                existing_summary=current_summary,
-                user_prompt=user_prompt if user_prompt else default_prompt
-            )
+            current_summary = chain.invoke({
+                "input_documents": [documents[i]],
+                "existing_summary": current_summary,
+                "user_prompt": prompt_to_use
+            })["output_text"]
 
         return current_summary
 
     # If fewer chunks than max batch size, process directly
     if len(documents) <= max_chunks_per_batch:
-        default_prompt = "Provide a comprehensive academic summary"
         return chain.invoke({
             "input_documents": documents,
-            "user_prompt": user_prompt if user_prompt else default_prompt
+            "user_prompt": prompt_to_use
         })["output_text"]
 
     # For larger documents, process in batches
@@ -176,10 +178,9 @@ def process_document_in_chunks(documents: List[Any],
     # Process initial batches to get intermediate summaries
     intermediate_results = []
     for batch in batches:
-        default_prompt = "Provide a comprehensive academic summary"
         batch_summary = chain.invoke({
             "input_documents": batch,
-            "user_prompt": user_prompt if user_prompt else default_prompt
+            "user_prompt": prompt_to_use
         })["output_text"]
         intermediate_results.append(batch_summary)
 
@@ -191,14 +192,12 @@ def process_document_in_chunks(documents: List[Any],
     ]
 
     # Create final combined summary using the same chain for consistency
-    default_prompt = "Provide a comprehensive academic summary"
     final_summary = chain.invoke({
         "input_documents": intermediate_docs,
-        "user_prompt": user_prompt if user_prompt else default_prompt
+        "user_prompt": prompt_to_use
     })["output_text"]
 
     return final_summary
-
 
 def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_length: str = "medium") -> dict:
     """
@@ -217,7 +216,7 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
     """
     try:
         # 1. Load PDF from URL using utility function
-        documents = load_pdf_from_url(pdf_url)
+        documents = load_pdf_from_private_url(pdf_url)
         if not documents:
             return {
                 "status": "error",

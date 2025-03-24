@@ -1,7 +1,8 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from bson import ObjectId
+from enum import Enum
 
 class PyObjectId(str):
     """Custom ObjectId class for Pydantic v2 models"""
@@ -26,6 +27,15 @@ class PyObjectId(str):
             ])
         ])
 
+class ContentType(str, Enum):
+    """Enum for supported content types"""
+    PDF = "pdf"
+    YOUTUBE = "youtube"
+    POWERPOINT = "powerpoint"
+    WEBPAGE = "webpage"
+    IMAGE = "image"
+    UNKNOWN = "unknown"
+
 class Summary(BaseModel):
     """
     Data model for a document summary.
@@ -42,6 +52,7 @@ class Summary(BaseModel):
     word_count: int = 0
     tags: List[str] = []
     metadata: Dict[str, Any] = {}
+    content_type: ContentType = ContentType.PDF  # Default to PDF for backward compatibility
 
     model_config = {
         "populate_by_name": True,
@@ -62,7 +73,8 @@ class Summary(BaseModel):
                 "created_at": "2023-03-10T14:30:00.000Z",
                 "word_count": 500,
                 "tags": ["economics", "research", "analysis"],
-                "metadata": {"source_pages": [1, 2, 3, 4]}
+                "metadata": {"source_pages": [1, 2, 3, 4]},
+                "content_type": "pdf"
             }
         }
     }
@@ -72,20 +84,22 @@ class SummaryCreate(BaseModel):
     Data model for creating a new summary.
     This model is used for validation of input data when creating a summary.
     """
-    pdf_url: str
+    content_url: str
     user_id: str
     prompt: Optional[str] = None
     summary_length: str = "medium"
     tags: List[str] = []
+    content_type: Optional[ContentType] = None  # If None, type will be auto-detected
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "pdf_url": "https://example.com/document.pdf",
+                "content_url": "https://example.com/document.pdf",
                 "user_id": "user123",
                 "prompt": "Summarize the key findings and methodology",
                 "summary_length": "medium",
-                "tags": ["research", "economics"]
+                "tags": ["research", "economics"],
+                "content_type": "pdf"
             }
         }
     }
@@ -101,6 +115,7 @@ class SummaryResponse(BaseModel):
     summary: Optional[str] = None
     word_count: Optional[int] = None
     error_message: Optional[str] = None
+    content_type: ContentType = ContentType.PDF  # Default to PDF for backward compatibility
 
     model_config = {
         "json_schema_extra": {
@@ -110,7 +125,8 @@ class SummaryResponse(BaseModel):
                 "document_id": "60d725b8aad7be7174610e82",
                 "summary": "This is a comprehensive summary of the document...",
                 "word_count": 500,
-                "error_message": None
+                "error_message": None,
+                "content_type": "pdf"
             }
         }
     }

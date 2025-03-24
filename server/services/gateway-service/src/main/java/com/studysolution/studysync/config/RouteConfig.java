@@ -16,6 +16,10 @@ public class RouteConfig {
                         // Remove the "/user-profile-service" prefix so the microservice gets the remaining path
                         .filters(f -> f.rewritePath("/user-profile-service/(?<segment>.*)", "/${segment}"))
                         .uri("lb://user-profile-service"))
+                .route("document-uploader-service", r -> r
+                        .path("/documentservice/**")
+                        .filters(f -> f.stripPrefix(1))
+                        .uri("lb://document-uploader-service"))
                 .build();
     }
 }

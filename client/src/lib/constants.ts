@@ -30,7 +30,7 @@ export const sideBarData = {
       items: [
         {
           title: "Summarizer",
-          url: "/public/dashboard/create-summary",
+          url: "/dashboard/create-summary",
         },
         {
           title: "Quiz Creator",
