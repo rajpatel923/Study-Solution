@@ -9,7 +9,30 @@ spring:
     url: r2dbc:pool:postgresql://localhost:5434/StudySolution
     username: StudySolution
     password: StudySolution
+  data:
+    r2dbc:
+      repositories:
+        enabled: true
 
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id:
+            client-secret:
+          google:
+            client-id:
+            client-secret:
+          facebook:
+            client-id:
+            client-secret:
+          apple:
+            client-id:
+            client-secret:
+            team-id:     # Missing property - causing the error
+            key-id:          # Likely missing as well
+            key-path: 
 
 
 jwt:
@@ -19,4 +42,12 @@ jwt:
 
 # Authentication Configuration
 auth:
-  white-list-urls: /api/v1/auth/login, /api/v1/auth/register, /api/v1/auth/refresh, /actuator/**, /api/public/**
+  white-list-urls: /api/v1/auth/login, /oauth2/**, /login/oauth2/**,/api/v1/auth/register, /api/v1/auth/refresh, /actuator/**, /api/public/**
+
+# Custom OAuth2 application properties
+app:
+  oauth2:
+    # Common redirect URI for all providers (this should match your frontend URL that handles the OAuth response)
+    redirect-uri: ${BASE_URL:http://localhost:8091}/login/oauth2/code/{registrationId}
+    # Success redirect URL (frontend page that shows login success)
+    redirect-success-url: ${OAUTH2_SUCCESS_URL:http://localhost:3000/oauth2/callback}

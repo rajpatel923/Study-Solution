@@ -14,11 +14,20 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/context/AuthContext"
 
 
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const data = sideBarData
+
+  const {user} = useAuth()
+
+  data.user.name = user?.username? user.username : "user"
+
+  data.user.email = user? user.email : "user"
+  
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>

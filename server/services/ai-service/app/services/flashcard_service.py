@@ -13,12 +13,14 @@ import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
 
-def get_flashcard_by_id(flashcard_id: str) -> dict:
+# Update the get_flashcard_by_id function to handle the flashcard_set_id field
+def get_flashcard_by_id(flashcard_id: str, x_user_id: str = None) -> dict:
     """
     Retrieves a flashcard from MongoDB by its ID.
 
     Args:
         flashcard_id: The MongoDB ObjectId of the flashcard as a string
+        x_user_id: Optional user ID for additional filtering
 
     Returns:
         dict: The flashcard document or error information
@@ -39,6 +41,18 @@ def get_flashcard_by_id(flashcard_id: str) -> dict:
         # Convert ObjectId to string for JSON serialization
         flashcard["_id"] = str(flashcard["_id"])
         flashcard["document_id"] = str(flashcard["document_id"])
+        if "flashcard_set_id" in flashcard:
+            flashcard["flashcard_set_id"] = str(flashcard["flashcard_set_id"])
+
+        # Get related flashcards if x_user_id is provided
+        if x_user_id:
+            set_id = flashcard.get("flashcard_set_id")
+            if set_id:
+                # If flashcard has a set ID, get other flashcards from the same set
+                flashcards = get_flashcards_by_set(set_id, x_user_id)
+            else:
+                # Fall back to document-based retrieval if no set ID
+                flashcards = get_flashcards_by_document(flashcard.get("document_id"), x_user_id)
 
         # Convert datetime objects to ISO strings
         if flashcard.get("created_at"):
@@ -58,7 +72,6 @@ def get_flashcard_by_id(flashcard_id: str) -> dict:
             "status": "error",
             "message": error_message
         }
-
 
 def get_flashcards_for_user(user_id: str, limit: int = 50, filters: dict = None) -> dict:
     """
@@ -688,6 +701,7 @@ def create_flashcards_from_content(
             flashcard_data = {
                 "user_id": user_id,
                 "document_id": document_id,
+                "flashcard_set_id": flashcard_set_id,  # Add reference to the flashcard set
                 "front_text": card["front"],
                 "back_text": card["back"],
                 "difficulty": card.get("difficulty", "medium"),
@@ -733,7 +747,6 @@ def create_flashcards_from_content(
             "status": "error",
             "error_message": error_message
         }
-
 
 def split_into_chunks(documents: List[Any],
                       chunk_size: int = 1500,
@@ -1002,3 +1015,74 @@ def get_content_specific_prompt(content_type: str) -> str:
 
     # Default to the base prompt for PDFs and other document types
     return base_template
+
+def get_flashcards_by_set(flashcard_set_id: str, user_id: str) -> dict:
+    """
+    Retrieves all flashcards associated with a specific flashcard set for a user.
+
+    Args:
+        flashcard_set_id: The flashcard set ID
+        user_id: The user's ID
+
+    Returns:
+        dict: The flashcard set and all associated flashcards
+    """
+    try:
+        db_client = get_mongodb_client()
+        db = db_client["ai_service"]
+
+        # First get the flashcard set info
+        sets_collection = db["flashcard_sets"]
+        flashcard_set = sets_collection.find_one({
+            "_id": ObjectId(flashcard_set_id),
+            "user_id": user_id
+        })
+
+        if not flashcard_set:
+            return {
+                "status": "error",
+                "message": f"Flashcard set :- {flashcard_set_id} not found"
+            }
+
+        # Convert ObjectIds to strings
+        flashcard_set["_id"] = str(flashcard_set["_id"])
+        flashcard_set["document_id"] = str(flashcard_set["document_id"])
+        if flashcard_set.get("created_at"):
+            flashcard_set["created_at"] = flashcard_set["created_at"].isoformat()
+
+        # Get all flashcards for this set and user
+        flashcards_collection = db["flashcards"]
+        cursor = flashcards_collection.find({
+            "flashcard_set_id": ObjectId(flashcard_set_id),
+            "user_id": user_id
+        }).sort("created_at", -1)
+
+        flashcards = []
+        for flashcard in cursor:
+            # Convert ObjectId to string for JSON serialization
+            flashcard["_id"] = str(flashcard["_id"])
+            flashcard["document_id"] = str(flashcard["document_id"])
+            flashcard["flashcard_set_id"] = str(flashcard["flashcard_set_id"])
+
+            # Convert datetime objects to ISO format
+            if flashcard.get("created_at"):
+                flashcard["created_at"] = flashcard["created_at"].isoformat()
+            if flashcard.get("last_reviewed"):
+                flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
+
+            flashcards.append(flashcard)
+
+        return {
+            "status": "success",
+            "flashcard_set": flashcard_set,
+            "flashcards": flashcards,
+            "count": len(flashcards)
+        }
+
+    except Exception as e:
+        error_message = f"Error retrieving flashcards for set: {str(e)}"
+        print(error_message)
+        return {
+            "status": "error",
+            "message": error_message
+        }

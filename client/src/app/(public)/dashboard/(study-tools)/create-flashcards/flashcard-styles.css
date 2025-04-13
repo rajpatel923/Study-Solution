@@ -1,0 +1,130 @@
+/* 
+  This file contains custom styles for the flashcard components.
+  Import this in your layout.tsx or globals.css file.
+*/
+
+/* Perspective container for 3D card flipping */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+/* Hide backface of elements during flip */
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Flipped state */
+.card-flipped {
+  transform: rotateY(0deg);
+}
+
+/* Animation for card entrance */
+@keyframes card-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-entrance {
+  animation: card-entrance 0.5s ease forwards;
+}
+
+/* Animation for card exit */
+@keyframes card-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.card-exit {
+  animation: card-exit 0.3s ease forwards;
+}
+
+/* Pulse animation for interactive elements */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pulse-on-hover:hover {
+  animation: pulse 0.5s ease-in-out;
+}
+
+/* Card shine effect on hover */
+.card-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-shine::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(30deg);
+  transition: transform 0.5s;
+  pointer-events: none;
+}
+
+.card-shine:hover::after {
+  transform: rotate(30deg) translate(0, 50%);
+}
+
+/* Specific styles for front and back of flashcards */
+.flashcard-front {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  z-index: 2;
+  transform: rotateY(0deg);
+}
+
+.flashcard-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  transform: rotateY(180deg);
+  z-index: 1;
+}
+
+/* Glow effect for active card */
+.card-active {
+  box-shadow: 0 0 15px rgba(var(--color-primary), 0.3);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Progress bar animation */
+.progress-animate {
+  transition: width 0.4s ease-in-out;
+}

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Eureka settings
     EUREKA_SERVER_URL: str = os.environ.get("EUREKA_SERVER_URL", "http://localhost:8761/eureka")
+    ELEVENLABS_API_KEY: str = os.environ.get("ELEVENLABS_API_KEY", "")
 
     # MongoDB settings
     MONGODB_URI: str = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/")
@@ -70,7 +71,7 @@ class EurekaClient:
         registration_data = {
             "instance": {
                 "instanceId": self.instance_id,
-                "hostName": self.hostname,
+                "hostName": self.ip_address,
                 "app": self.app_name.upper(),
                 "ipAddr": self.ip_address,
                 "status": "UP",

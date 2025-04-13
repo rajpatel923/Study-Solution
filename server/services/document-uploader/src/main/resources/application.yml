@@ -49,3 +49,21 @@ springdoc:
     swagger-ui:
         path: /swagger-ui.html
         operationsSorter: method
+
+info:
+  application:
+    name: Document Uploader Service
+    description: Handles document uploads and processing
+    version: 1.0.0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from app.models.flashcard import FlashcardCreate, FlashcardResponse, FlashcardUpdateRequest, FlashcardReviewRequest
 from app.services.flashcard_service import (
     create_flashcards_from_content,
@@ -7,7 +7,8 @@ from app.services.flashcard_service import (
     get_flashcards_by_document,
     update_flashcard,
     update_flashcard_review_status,
-    delete_flashcard
+    delete_flashcard,
+    get_flashcards_by_set
 )
 from typing import List, Optional
 from pydantic import BaseModel
@@ -58,14 +59,15 @@ async def create_flashcards(flashcard_data: FlashcardCreate):
 @router.get("/{flashcard_id}", response_model=dict)
 async def read_flashcard(
         flashcard_id: str,
-        user_id: str
+        x_user_id : str = Header(..., alias="X-User-ID")
 ):
     """
     Retrieve a flashcard by its ID.
 
     User ID is passed as a query parameter and expected to be validated by the API gateway.
     """
-    result = get_flashcard_by_id(flashcard_id)
+    result = get_flashcard_by_id(flashcard_id, x_user_id)
+    user_id = x_user_id
 
     if result["status"] == "error":
         raise HTTPException(status_code=404, detail=result["message"])
@@ -79,6 +81,22 @@ async def read_flashcard(
 
     return result
 
+@router.get("/set/{flashcard_set_id}", response_model=dict)
+async def get_flashcard_set(
+        flashcard_set_id: str,
+        x_user_id: str = Header(..., alias="X-User-ID")
+):
+    """
+    Retrieve all flashcards associated with a specific flashcard set for a user.
+
+    User ID is passed in the header and expected to be validated by the API gateway.
+    """
+    result = get_flashcards_by_set(flashcard_set_id, x_user_id)
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=404, detail=result["message"])
+
+    return result
 
 @router.get("/document/{document_id}", response_model=dict)
 async def get_document_flashcards(

@@ -85,7 +85,7 @@ class SummaryCreate(BaseModel):
     This model is used for validation of input data when creating a summary.
     """
     content_url: str
-    user_id: str
+    user_id: Optional[str] = None
     prompt: Optional[str] = None
     summary_length: str = "medium"
     tags: List[str] = []

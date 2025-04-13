@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { gsap } from "gsap";
-import { FileText, Image, Video, FileAudio, FileSpreadsheet, Star } from "lucide-react";
+import { FileText, Image, Video, FileAudio, Star, PanelsTopLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import UploadWorkflow from "./UploadWorkflow";
@@ -12,7 +12,7 @@ const TABS = [
   { id: "ppt", label: "AI PPT Summarizer", icon: <Image className="mr-2 h-4 w-4" /> },
   { id: "video", label: "AI Video Summarizer", icon: <Video className="mr-2 h-4 w-4" /> },
   { id: "lecture", label: "AI Lecture Note Taker", icon: <FileAudio className="mr-2 h-4 w-4" /> },
-  { id: "excel", label: "AI Excel Summarizer", icon: <FileSpreadsheet className="mr-2 h-4 w-4" /> }
+  { id: "webpage", label: "AI webpage Summarizer", icon: <PanelsTopLeft className="mr-2 h-4 w-4" /> }
 ];
 
 export default function SummaryOptions() {

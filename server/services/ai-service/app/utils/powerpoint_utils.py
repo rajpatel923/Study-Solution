@@ -2,12 +2,19 @@ import os
 import tempfile
 import requests
 import logging
-from typing import List, Optional
 from langchain.schema import Document
 from pptx import Presentation
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 from urllib.parse import urlparse
+import base64
+from typing import Dict, List, Optional, Union, Tuple
+from pydantic import BaseModel
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
 
 # Load environment variables
 load_dotenv()
@@ -349,3 +356,191 @@ def is_powerpoint_url(url: str) -> bool:
     """
     return url.lower().endswith(
         ('.ppt', '.pptx', '.pps', '.ppsx')) or '/ppt' in url.lower() or 'presentation' in url.lower()
+
+
+
+
+# ------- This is AI powerpoint presentation -----------
+
+
+
+class SlideExtract(BaseModel):
+    """Model for extracted slide content"""
+    slide_number: int
+    title: str
+    content: str
+    notes: Optional[str] = None
+
+
+class PresentationExtract(BaseModel):
+    """Model for extracted presentation content"""
+    title: str
+    slides: List[SlideExtract]
+    total_slides: int
+
+
+def process_powerpoint_file(file_content: bytes) -> PresentationExtract:
+    """
+    Process PowerPoint file bytes and extract slide content
+
+    Args:
+        file_content: Raw bytes of the PowerPoint file
+
+    Returns:
+        PresentationExtract: Structured content from the presentation
+    """
+    try:
+        # Create a temporary file to store the PowerPoint
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(file_content)
+
+        # Extract content from the PowerPoint file
+        presentation = Presentation(temp_path)
+        slides = []
+        presentation_title = "Untitled Presentation"
+
+        # Try to extract presentation title from properties
+        if hasattr(presentation.core_properties, 'title') and presentation.core_properties.title:
+            presentation_title = presentation.core_properties.title
+
+        # Extract text from each slide
+        for slide_idx, slide in enumerate(presentation.slides):
+            slide_title = ""
+            slide_content = ""
+            slide_notes = ""
+
+            # Extract title from first shape if it appears to be a title
+            if slide.shapes.title:
+                slide_title = slide.shapes.title.text
+
+            # Extract text from all shapes in the slide
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text:
+                    # Skip if this is the title we already extracted
+                    if shape.text == slide_title:
+                        continue
+                    slide_content += shape.text + "\n"
+
+            # Extract notes
+            if slide.has_notes_slide:
+                notes_slide = slide.notes_slide
+                for note_shape in notes_slide.shapes:
+                    if hasattr(note_shape, "text") and note_shape.text:
+                        slide_notes += note_shape.text + "\n"
+
+            # Create a SlideExtract object
+            slide_extract = SlideExtract(
+                slide_number=slide_idx + 1,
+                title=slide_title,
+                content=slide_content.strip(),
+                notes=slide_notes.strip() if slide_notes.strip() else None
+            )
+            slides.append(slide_extract)
+
+        # Clean up the temporary file
+        os.unlink(temp_path)
+
+        return PresentationExtract(
+            title=presentation_title,
+            slides=slides,
+            total_slides=len(slides)
+        )
+
+    except Exception as e:
+        logger.error(f"Error processing PowerPoint file: {str(e)}")
+        # Clean up temp file if it exists
+        if 'temp_path' in locals():
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+        raise
+
+
+async def process_powerpoint_from_upload(file_data: bytes) -> PresentationExtract:
+    """
+    Process PowerPoint from uploaded file data
+
+    Args:
+        file_data: Raw bytes from uploaded file
+
+    Returns:
+        PresentationExtract: Structured content from the presentation
+    """
+    return process_powerpoint_file(file_data)
+
+
+async def process_powerpoint_from_base64(base64_data: str) -> PresentationExtract:
+    """
+    Process PowerPoint from base64-encoded string
+
+    Args:
+        base64_data: Base64-encoded PowerPoint data
+
+    Returns:
+        PresentationExtract: Structured content from the presentation
+    """
+    # Remove data URI prefix if present
+    if base64_data.startswith('data:'):
+        # Extract just the base64 part
+        base64_data = base64_data.split(',')[1]
+
+    # Decode base64 to bytes
+    file_content = base64.b64decode(base64_data)
+
+    return process_powerpoint_file(file_content)
+
+
+def convert_to_presentation_setup(
+        presentation_extract: PresentationExtract,
+        session_id: str,
+        presenter_ranges: List[Tuple[int, int]],
+        student_persona: Optional[Dict] = None
+) -> Dict:
+    """
+    Convert extracted presentation to setup format
+
+    Args:
+        presentation_extract: Extracted presentation content
+        session_id: Session identifier
+        presenter_ranges: List of tuples with ranges (start, end) for human presenter
+        student_persona: Optional customizations for the AI persona
+
+    Returns:
+        Dict: Formatted presentation setup data
+    """
+    # Format slide contents for the API
+    slide_contents = []
+    for slide in presentation_extract.slides:
+        content = f"{slide.title}\n\n{slide.content}"
+        if slide.notes:
+            content += f"\n\nNotes: {slide.notes}"
+
+        slide_contents.append({
+            "slide_number": slide.slide_number,
+            "content": content
+        })
+
+    # Format presenter ranges
+    presenter_range_objects = []
+    for start, end in presenter_ranges:
+        presenter_range_objects.append({
+            "start": start,
+            "end": end
+        })
+
+    # Create setup data
+    setup_data = {
+        "session_id": session_id,
+        "slide_contents": slide_contents,
+        "presenter_ranges": presenter_range_objects,
+        "presentation_title": presentation_extract.title,
+        "presentation_topic": presentation_extract.title  # Use title as topic if not provided
+    }
+
+    # Add student persona if provided
+    if student_persona:
+        setup_data["student_persona"] = student_persona
+
+    return setup_data

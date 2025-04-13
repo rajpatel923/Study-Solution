@@ -23,10 +23,32 @@ interface DocumentResponse {
   fileName?: string;
   publicUrl?: string;
 }
+interface UrlUploadRequest {
+  url: string;
+  userId?: string;
+  title?: string;
+}
+
+const extractTitleFromUrl = (url: string): string => {
+  try {
+    // Extract filename from URL
+    const parsedUrl = new URL(url);
+    const pathname = parsedUrl.pathname;
+    const filename = pathname.split("/").pop() || "";
+
+    // Remove file extension and replace dashes/underscores with spaces
+    return (
+      filename.split(".").slice(0, -1).join(".").replace(/[-_]/g, " ").trim() ||
+      "URL Document"
+    );
+  } catch (e) {
+    return "URL Document";
+  }
+};
 
 // Create an axios instance with default configs
 const api = axios.create({
-  baseURL: "http://localhost:8092/api/v1/documents",
+  baseURL: "http://localhost:8091/documentservice/api/v1/documents",
   headers: {
     "Content-Type": "application/json",
   },
@@ -262,6 +284,38 @@ const documentService = {
         error.response?.data?.message || "API health check failed";
       toast.error(errorMessage);
       console.error("Error checking API health:", error);
+      throw error;
+    }
+  },
+
+  uploadFromUrl: async (url: string): Promise<DocumentResponse> => {
+    try {
+      const requestData: UrlUploadRequest = {
+        url,
+        userId: "user123", // Replace with actual user ID from auth context
+        title: extractTitleFromUrl(url),
+      };
+
+      const response: AxiosResponse<DocumentResponse> = await api.post(
+        "/upload-url",
+        requestData,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.success) {
+        toast.success("URL document processed successfully");
+      }
+
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message || "Error processing URL";
+      toast.error(errorMessage);
+      console.error("Error processing URL:", error);
       throw error;
     }
   },

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+import logging
+
+from fastapi import APIRouter, HTTPException, Header
 from app.models.summary import SummaryCreate, SummaryResponse, ContentType
 from app.services.summarize_service import summarize_content, get_summary_by_id, get_summaries_for_user
 from typing import List, Optional
@@ -8,16 +10,15 @@ router = APIRouter(prefix="/summaries", tags=["summaries"])
 
 
 @router.post("/", response_model=SummaryResponse)
-async def create_summary(summary_data: SummaryCreate):
+async def create_summary(summary_data: SummaryCreate, x_user_id: str = Header(..., alias="X-User-ID")):
     """
     Create a new summary from any supported content URL (PDF, YouTube, PowerPoint, etc.).
     This endpoint processes the request synchronously - the client will wait until processing is complete.
 
-    User ID is expected to be validated by the API gateway.
+    User ID is expected to be validated by the API gateway and passed in headers.
     """
-    # User ID comes directly from the request payload
-    user_id = summary_data.user_id
-
+    # User ID comes from the header
+    user_id = x_user_id
     # Process the content synchronously (client waits for complete processing)
     result = summarize_content(
         content_url=summary_data.content_url,
@@ -48,13 +49,14 @@ async def create_summary(summary_data: SummaryCreate):
 @router.get("/{summary_id}", response_model=SummaryResponse)
 async def read_summary(
         summary_id: str,
-        user_id: str
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Retrieve a summary by its ID.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is validated by the API gateway and passed in headers.
     """
+    user_id = x_user_id
     result = get_summary_by_id(summary_id)
 
     if result["status"] == "error":
@@ -81,19 +83,21 @@ class SummaryUpdateRequest(BaseModel):
     summary_content: Optional[str] = None
     title: Optional[str] = None
     tags: Optional[List[str]] = None
-    user_id: str
 
 
 @router.patch("/{summary_id}", response_model=SummaryResponse)
 async def update_summary(
         summary_id: str,
-        update_data: SummaryUpdateRequest
+        update_data: SummaryUpdateRequest,
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Update an existing summary.
 
-    User ID is expected to be validated by the API gateway.
+    User ID is validated by the API gateway and passed in headers.
     """
+    user_id = x_user_id
+
     try:
         # First verify the summary exists and belongs to the user
         summary_result = get_summary_by_id(summary_id)
@@ -101,7 +105,7 @@ async def update_summary(
         if summary_result["status"] == "error":
             raise HTTPException(status_code=404, detail="Summary not found")
 
-        if summary_result["summary"]["user_id"] != update_data.user_id:
+        if summary_result["summary"]["user_id"] != user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to update this summary"
@@ -167,7 +171,7 @@ async def update_summary(
 
 @router.get("/", response_model=dict)
 async def list_summaries(
-        user_id: str,
+        x_user_id: str = Header(..., alias="X-User-ID"),
         limit: int = 10,
         content_type: Optional[str] = None
 ):
@@ -175,8 +179,9 @@ async def list_summaries(
     Retrieve all summaries for the specified user.
     Optionally filter by content type.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is validated by the API gateway and passed in headers.
     """
+    user_id = x_user_id
     result = get_summaries_for_user(user_id, limit)
 
     if result["status"] == "error":
@@ -196,13 +201,15 @@ async def list_summaries(
 @router.delete("/{summary_id}", response_model=dict)
 async def delete_summary(
         summary_id: str,
-        user_id: str
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Delete a summary by its ID.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is validated by the API gateway and passed in headers.
     """
+    user_id = x_user_id
+
     try:
         # First verify the summary exists and belongs to the user
         summary_result = get_summary_by_id(summary_id)

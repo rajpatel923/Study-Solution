@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 from app.routes.flashcards import router as flashcards_router
 from app.routes.summarizer import router as summarizer_router
 from app.routes.test_note import router as test_note_router
+from app.routes.voice_assistant import router as voice_assistant_router
+from app.routes.web_sockets import router as web_sockets_router
+
+# And add this line after your other app.include_router() calls:
+
 
 
 
@@ -45,6 +50,8 @@ app.add_middleware(
 app.include_router(flashcards_router, prefix=settings.API_PREFIX)
 app.include_router(summarizer_router, prefix=settings.API_PREFIX)
 app.include_router(test_note_router, prefix=settings.API_PREFIX)
+app.include_router(voice_assistant_router, prefix=settings.API_PREFIX)
+app.include_router(web_sockets_router, prefix=settings.API_PREFIX)
 
 
 

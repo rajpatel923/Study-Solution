@@ -6,11 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useAuth } from "@/common/auth/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 import Input from "@/components/ui/customeInput";
 import { Button } from "@/components/ui/button";
-import {Select} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import SocialAuthButtons from "@/components/common/auth/socialAuthButton";
 
 // Login schema
@@ -36,14 +36,12 @@ type SignupFormData = z.infer<typeof signupSchema>;
 export default function AuthPage() {
   const router = useRouter();
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
   // Use our auth context
-  const { login, register: authRegister, isAuthenticated } = useAuth();
+  const { login, register: authRegister, isAuthenticated, isLoading, error } = useAuth();
   
   // Initialize both forms regardless of which one is displayed
-  // This fixes the React Hook rule violation by ensuring hooks are always called in the same order
   const {
     register: registerLogin,
     handleSubmit: handleSubmitLogin,
@@ -60,6 +58,13 @@ export default function AuthPage() {
     resolver: zodResolver(signupSchema),
   });
   
+  // Set auth error from context
+  useEffect(() => {
+    if (error) {
+      setAuthError(error);
+    }
+  }, [error]);
+  
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -68,11 +73,9 @@ export default function AuthPage() {
   }, [isAuthenticated, router]);
 
   const onLoginSubmit: SubmitHandler<LoginFormData> = async (data) => {
-    setIsLoading(true);
     setAuthError(null);
     
     try {
-      // Use the auth context login method instead of direct fetch
       const success = await login(data.username, data.password);
       
       if (success) {
@@ -83,52 +86,30 @@ export default function AuthPage() {
     } catch (error) {
       console.error("Login error:", error);
       setAuthError("An unexpected error occurred. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormData> = async (data) => {
-    setIsLoading(true);
     setAuthError(null);
     
     try {
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8091";
-      
-      // First, register the user with your backend
-      const response = await fetch(`${API_URL}/api/v1/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: data.username,
-          email: data.email,
-          password: data.password,
-          name: data.name,
-          birthday: data.birthday,
-          accountType: data.accountType
-        }),
-        credentials: "include",
+      const success = await authRegister({
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        name: data.name,
+        birthday: data.birthday,
+        accountType: data.accountType
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setAuthError(errorData.message || "Registration failed. Please try again.");
-        return;
-      }
       
-      // If registration is successful, log the user in automatically
-      const loginSuccess = await login(data.username, data.password);
-      
-      if (loginSuccess) {
+      if (success) {
         router.push("/dashboard");
       } else {
-        setAuthError("Registration was successful but login failed. Please try logging in manually.");
+        setAuthError("Registration failed. Please try again.");
       }
     } catch (error) {
       console.error("Registration error:", error);
       setAuthError("An unexpected error occurred. Please try again.");
-    } finally {
-      setIsLoading(false);
     }
   };
 

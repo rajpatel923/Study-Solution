@@ -5,8 +5,8 @@ import { toast } from "sonner";
 
 // Define types for API requests and responses
 export interface SummaryCreate {
-  pdf_url: string;
-  user_id: string;
+  content_url: string;
+  user_id?: string;
   prompt?: string;
   summary_length?: "short" | "medium" | "long";
   tags?: string[];
@@ -49,10 +49,16 @@ const summaryService = {
   createSummary: async (
     summaryData: SummaryCreate
   ): Promise<SummaryResponse> => {
+    console.log(summaryData);
     try {
       const response: AxiosResponse<SummaryResponse> = await api.post(
         "/",
-        summaryData
+        summaryData,
+        {
+          headers: {
+            "X-User-ID": "user123",
+          },
+        }
       );
 
       if (response.data.status === "processing") {
@@ -77,7 +83,7 @@ const summaryService = {
       const userId = "current-user-id"; // Replace with actual user ID when available
 
       const response: AxiosResponse<SummaryResponse> = await api.get(
-        `/${summaryId}?user_id=${userId}`
+        `/${summaryId}?x_user_id=${userId}`
       );
       return response.data;
     } catch (error: any) {
@@ -97,7 +103,12 @@ const summaryService = {
   ): Promise<SummaryResponse> => {
     try {
       const response: AxiosResponse<SummaryResponse> = await api.get(
-        `/${summaryId}?user_id=${userId}`
+        `/${summaryId}?X-User-ID=${userId}`,
+        {
+          headers: {
+            "X-User-ID": userId,
+          },
+        }
       );
       return response.data;
     } catch (error: any) {

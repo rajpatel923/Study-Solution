@@ -5,20 +5,20 @@ import NavBar from "@/components/common/navBar";
 
 
 import Footer from "@/components/common/footer";
-import Advertisement from "@/components/common/Bianca/advertisement";
-import AllFeatures from "@/components/common/Bianca/allFeatures";
+import Advertisement from "@/components/common/advertisement";
+import AllFeatures from "@/components/common/allFeatures";
 
 
 export default function Home() {
   return (
     <div className="">
-      <NavBar/>
-      <HeroSection/>
-      <ComparingSection/>
-      <MainFeatures/>
-      <Advertisement/>
-      <AllFeatures/>
-      <Footer/>
+        <NavBar/>
+        <HeroSection/>
+        <ComparingSection/>
+        <MainFeatures/>
+        <Advertisement/>
+        <AllFeatures/>
+        <Footer/> 
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
 
 export const sideBarData = {
   user: {
-    name: "user",
+    name: "User",
     email: "user@gmail.com",
     avatar: "/avatar/avatar.jpg",
   },
@@ -34,15 +34,15 @@ export const sideBarData = {
         },
         {
           title: "Quiz Creator",
-          url: "/public/dashboard/create-quiz",
+          url: "/dashboard/create-quiz",
         },
         {
           title: "Flashcards",
-          url: "/public/dashboard/create-flashcards",
+          url: "/dashboard/create-flashcards",
         },
         {
           title: "Study Planner",
-          url: "/public/dashboard/create-study-plan",
+          url: "/dashboard/create-study-plan",
         },
       ],
     },
@@ -72,19 +72,19 @@ export const sideBarData = {
       items: [
         {
           title: "docs",
-          url: "/public/dashboard/save-documents",
+          url: "/dashboard/save-documents",
         },
         {
           title: "summaries",
-          url: "/public/dashboard/save-summaries",
+          url: "/dashboard/save-summaries",
         },
         {
           title: "flashcards",
-          url: "/public/dashboard/save-flashcards",
+          url: "/dashboard/save-flashcards",
         },
         {
           title: "quiz",
-          url: "/public/dashboard/save-quiz",
+          url: "/dashboard/save-quiz",
         },
       ],
     },

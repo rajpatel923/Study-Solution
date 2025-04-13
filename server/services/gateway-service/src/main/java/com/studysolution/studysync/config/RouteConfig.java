@@ -20,6 +20,10 @@ public class RouteConfig {
                         .path("/documentservice/**")
                         .filters(f -> f.stripPrefix(1))
                         .uri("lb://document-uploader-service"))
+                .route("ai-service", r -> r
+                        .path("/aiservice/**")
+                        .filters(f -> f.stripPrefix(1))
+                        .uri("lb://AI-SERVICE"))
                 .build();
     }
 }

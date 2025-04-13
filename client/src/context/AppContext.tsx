@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useCallback } from "react";
-import summaryService from "@/services/summaryService"; // Adjust the import path as needed
+import summaryService from "@/services/summaryService";
 
 interface File {
   id: string;
@@ -20,6 +20,9 @@ interface SummaryResult {
   keyPoints: string[];
   flashcards: { question: string; answer: string }[];
   createdAt: Date;
+  status?: string;
+  cardCount?: number;
+  type?: "summary" | "flashcards" | "quiz";
 }
 
 interface DocumentMetadata {
@@ -31,6 +34,7 @@ interface DocumentMetadata {
   title?: string;
   tags?: string[];
 }
+
 
 interface SaveStatus {
   status: "idle" | "saving" | "saved" | "error";
@@ -56,7 +60,7 @@ interface AppContextType {
   setDocumentMetadata: (metadata: DocumentMetadata | null) => void;
   updateDocumentMetadata: (updates: Partial<DocumentMetadata>) => void;
   saveDocument: (content: string) => Promise<void>;
-  saveStatus: SaveStatus;
+  saveStatus: SaveStatus; 
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -87,7 +91,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addResult = (result: SummaryResult) => {
-    setResults((prevResults) => [...prevResults, result]);
+    // Check if this result already exists
+    setResults((prevResults) => {
+      const existingIndex = prevResults.findIndex(r => r.id === result.id);
+      if (existingIndex >= 0) {
+        // Update existing result
+        const updatedResults = [...prevResults];
+        updatedResults[existingIndex] = {
+          ...updatedResults[existingIndex],
+          ...result
+        };
+        return updatedResults;
+      } else {
+        // Add new result
+        return [...prevResults, result];
+      }
+    });
   };
 
   const updateDocumentMetadata = (updates: Partial<DocumentMetadata>) => {
@@ -96,6 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...prev, ...updates, lastUpdated: new Date().toISOString() };
     });
   };
+
 
   // Implement the save document function
   const saveDocument = useCallback(async (content: string) => {
@@ -152,6 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [documentMetadata, saveStatus]);
 
+  // Implement the save flashcards function
   return (
     <AppContext.Provider
       value={{
@@ -172,7 +193,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDocumentMetadata,
         updateDocumentMetadata,
         saveDocument,
-        saveStatus
+        saveStatus,
+        
       }}
     >
       {children}

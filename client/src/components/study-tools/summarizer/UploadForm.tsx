@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { gsap } from "gsap";
-import { Upload, Link2, ExternalLink } from "lucide-react";
+import { Upload, Link2, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import KaiMascot from "./KaiMascot";
@@ -11,9 +11,23 @@ interface UploadFormProps {
   activeTab: string;
   onFileUpload?: (file: File) => void;
   onUrlUpload?: (url: string) => void;
+  isLoading?: boolean;
+  submitButtonText?: string;
+  fileTypes?: string[];
+  acceptedFileExtensions?: string;
+  dropzoneText?: string;
 }
 
-export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: UploadFormProps) {
+export default function UploadForm({ 
+  activeTab, 
+  onFileUpload, 
+  onUrlUpload,
+  isLoading = false,
+  submitButtonText = "Process",
+  fileTypes = [],
+  acceptedFileExtensions = "", 
+  dropzoneText = ""
+}: UploadFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropAreaRef = useRef<HTMLDivElement>(null);
@@ -77,14 +91,17 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
   };
   
   const handleFile = (file: File) => {
-    // Check if file is PDF for PDF tab
-    if (activeTab === 'pdf' && file.type !== 'application/pdf') {
+    // Validate file type based on activeTab or fileTypes prop
+    if (activeTab === 'pdf' && file.type !== 'application/pdf' && !fileTypes.includes(file.type)) {
       alert('Please upload a PDF file');
       return;
     }
     
-    // Handle other file type validations for other tabs
-    // ...
+    // For flashcards, we might want to support more file types
+    if (fileTypes.length > 0 && !fileTypes.includes(file.type)) {
+      alert(`Please upload one of the following file types: ${fileTypes.join(', ')}`);
+      return;
+    }
     
     // Call the callback with the file
     if (onFileUpload) {
@@ -113,6 +130,9 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
   };
   
   const getTabTitle = () => {
+    // Use custom dropzoneText if provided
+    if (dropzoneText) return dropzoneText;
+    
     switch (activeTab) {
       case 'pdf': return 'PDF';
       case 'ppt': return 'PowerPoint';
@@ -120,6 +140,19 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
       case 'lecture': return 'Lecture Notes';
       case 'excel': return 'Excel';
       default: return 'Document';
+    }
+  };
+  
+  // Determine accept attribute for input
+  const getAcceptString = () => {
+    if (acceptedFileExtensions) return acceptedFileExtensions;
+    
+    switch (activeTab) {
+      case 'pdf': return ".pdf";
+      case 'ppt': return ".ppt,.pptx";
+      case 'video': return ".mp4,.webm";
+      case 'excel': return ".xls,.xlsx,.csv";
+      default: return undefined;
     }
   };
   
@@ -139,10 +172,18 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
                 className="pl-10 pr-20"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                disabled={isLoading}
               />
             </div>
-            <Button type="submit" className="ml-2 whitespace-nowrap">
-              Summarize
+            <Button type="submit" className="ml-2 whitespace-nowrap" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                submitButtonText
+              )}
             </Button>
           </div>
         </div>
@@ -158,26 +199,39 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
       {/* File Upload Area */}
       <div 
         ref={dropAreaRef}
-        onClick={handleClick}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`animate-item relative w-full border-2 border-dashed border-border rounded-lg h-48 flex flex-col items-center justify-center mb-6 cursor-pointer transition-colors duration-300 ${dragActive ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}`}
+        onClick={isLoading ? undefined : handleClick}
+        onDragOver={isLoading ? undefined : handleDragOver}
+        onDragLeave={isLoading ? undefined : handleDragLeave}
+        onDrop={isLoading ? undefined : handleDrop}
+        className={`animate-item relative w-full border-2 border-dashed border-border rounded-lg h-48 flex flex-col items-center justify-center mb-6 ${isLoading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer transition-colors duration-300'} ${dragActive ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}`}
       >
         <div className="text-center relative z-10">
-          <div className="mb-4 text-primary">
-            <Upload className="h-8 w-8 mx-auto" />
-          </div>
-          <p className="text-foreground mb-2">Drag & drop a {getTabTitle()} file to upload</p>
-          <p className="text-muted-foreground text-sm">Or, select file</p>
-          <input
-            ref={inputRef}
-            type="file"
-            id="file-upload"
-            className="hidden"
-            accept={activeTab === 'pdf' ? ".pdf" : undefined}
-            onChange={handleFileChange}
-          />
+          {isLoading ? (
+            <>
+              <div className="mb-4 text-primary">
+                <Loader2 className="h-8 w-8 mx-auto animate-spin" />
+              </div>
+              <p className="text-foreground mb-2">Processing your file...</p>
+              <p className="text-muted-foreground text-sm">Please wait</p>
+            </>
+          ) : (
+            <>
+              <div className="mb-4 text-primary">
+                <Upload className="h-8 w-8 mx-auto" />
+              </div>
+              <p className="text-foreground mb-2">Drag & drop a {getTabTitle()} to upload</p>
+              <p className="text-muted-foreground text-sm">Or, select file</p>
+              <input
+                ref={inputRef}
+                type="file"
+                id="file-upload"
+                className="hidden"
+                accept={getAcceptString()}
+                onChange={handleFileChange}
+                disabled={isLoading}
+              />
+            </>
+          )}
         </div>
         
         {/* Kai Mascot */}
@@ -188,7 +242,12 @@ export default function UploadForm({ activeTab, onFileUpload, onUrlUpload }: Upl
       
       {/* Google Drive Option */}
       <div className="animate-item text-center">
-        <Button variant="ghost" size="sm" className="text-primary/80 hover:text-primary">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-primary/80 hover:text-primary"
+          disabled={isLoading}
+        >
           <ExternalLink className="h-4 w-4 mr-2" />
           Or, upload from Google Drive
         </Button>

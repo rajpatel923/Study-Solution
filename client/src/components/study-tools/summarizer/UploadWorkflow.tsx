@@ -175,7 +175,7 @@ export default function UploadWorkflow() {
       const checkStatus = async () => {
         try {
           // Get the summary status
-          const summary = await summaryService.getSummaryById(summaryId, "current-user-id");
+          const summary = await summaryService.getSummaryById(summaryId, "user123");
           
           // If successful, move to complete state
           if (summary.status === 'success') {
@@ -267,8 +267,7 @@ export default function UploadWorkflow() {
           
           // Create the summary request based on the output type
           const summaryRequest: SummaryCreate = {
-            pdf_url: uploadedFile.url,
-            user_id: userId,
+            content_url: uploadedFile.url,
             summary_length: preferences.noteLength === "in-depth" ? "long" : "medium",
             tags: []
           };

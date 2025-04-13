@@ -53,7 +53,7 @@ const SummaryEditPage = () => {
         setError(null);
         
         // Use the user_id parameter for authentication
-        const userId = "current-user-id"; // Replace with your auth system's user ID
+        const userId = "user123"; // Replace with your auth system's user ID
         const result = await summaryService.getSummaryById(summaryId, userId);
         
         if (result.status === "success" && result.summary) {

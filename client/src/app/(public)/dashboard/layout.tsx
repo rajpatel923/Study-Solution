@@ -3,8 +3,7 @@
 
 import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/common/auth/AuthContext';
-import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 import Loader from '@/components/common/loading';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { PlusCircle, Search } from "lucide-react"
@@ -22,18 +21,19 @@ import { Separator } from "@/components/ui/separator"
 import { Button } from '@/components/ui/button';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated, loading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  
 
   // useEffect(() => {
   //   // Redirect to login if not authenticated and not loading
-  //   if (!loading && !isAuthenticated) {
+  //   if (!isLoading && !isAuthenticated) {
   //     router.push('/auth');
   //   }
-  // }, [isAuthenticated, loading, router]);
+  // }, [isAuthenticated, isLoading, router]);
 
   // // Show loading state while checking authentication
-  // if (loading) {
+  // if (isLoading) {
   //   return (
   //     <div className="flex h-screen items-center justify-center">
   //       <Loader/>

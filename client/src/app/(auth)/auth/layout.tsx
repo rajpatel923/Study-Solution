@@ -10,6 +10,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="bg-[#1E1E1E] text-white w-full md:w-1/2 overflow-y-auto max-h-screen">
         <div className="flex justify-center items-center p-8 md:p-16">
           <div className="w-full h-full">
+            
             {children}
           </div>
         </div>

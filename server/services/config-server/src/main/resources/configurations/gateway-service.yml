@@ -18,6 +18,12 @@ spring:
           uri: lb://document-uploader-service
           filters:
             - StripPrefix=1
+        - id: aiservice
+          predicates:
+            - Path=/aiservice/**
+          uri: lb://ai-service  # Lower case to match Python registration
+          filters:
+              - StripPrefix=1
 
 
 

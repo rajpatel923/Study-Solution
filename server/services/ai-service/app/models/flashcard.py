@@ -19,6 +19,7 @@ class Flashcard(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     user_id: str
     document_id: PyObjectId
+    flashcard_set_id: PyObjectId  # Add reference to the flashcard set
     front_text: str
     back_text: str
     difficulty: FlashcardDifficulty = FlashcardDifficulty.MEDIUM
@@ -43,6 +44,7 @@ class Flashcard(BaseModel):
                 "_id": "60d725b8aad7be7174610e83",
                 "user_id": "user123",
                 "document_id": "60d725b8aad7be7174610e82",
+                "flashcard_set_id": "60d725b8aad7be7174610e84",
                 "front_text": "What is the capital of France?",
                 "back_text": "Paris is the capital of France.",
                 "difficulty": "medium",
@@ -57,7 +59,6 @@ class Flashcard(BaseModel):
             }
         }
     }
-
 class FlashcardSet(BaseModel):
     """
     Data model for a set of flashcards.
@@ -100,7 +101,7 @@ class FlashcardCreate(BaseModel):
     This model is used for validation of input data when creating flashcards.
     """
     content_url: str
-    user_id: str
+    user_id: Optional[str] = None
     difficulty_level: str = "mixed"  # "easy", "medium", "hard", or "mixed"
     tags: List[str] = []
     focus_areas: Optional[List[str]] = None
