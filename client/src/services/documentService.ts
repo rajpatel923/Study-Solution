@@ -11,6 +11,7 @@ interface DocumentDTO {
   fileSize: number;
   uploadedAt: string;
   url: string;
+  previewUrl: string;
   pageCount?: number;
   metadata?: string;
   active: boolean;
@@ -90,7 +91,10 @@ const documentService = {
   // Get all documents
   getAllDocuments: async (): Promise<DocumentDTO[]> => {
     try {
-      const response: AxiosResponse<DocumentDTO[]> = await api.get("/");
+      const response: AxiosResponse<DocumentDTO[]> = await api.get(
+        "/user/with-preview"
+      );
+      console.log("Documents fetched successfully:", response.data);
       return response.data;
     } catch (error: any) {
       const errorMessage =

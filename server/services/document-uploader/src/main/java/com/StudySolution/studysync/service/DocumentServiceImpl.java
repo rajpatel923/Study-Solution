@@ -8,6 +8,9 @@ import com.StudySolution.studysync.repository.DocumentRepository;
 import com.StudySolution.studysync.util.DocumentUtil;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.sas.BlobSasPermission;
+import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
+import com.azure.storage.common.sas.SasProtocol;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -17,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -232,4 +236,76 @@ public class DocumentServiceImpl implements DocumentService {
                     return documentUtils.convertToDTO(updatedDocument);
                 });
     }
+
+    @Override
+    public Optional<String> generateSasUrl(Long id, int expiryMinutes) {
+        return documentRepository.findByIdAndActiveTrue(id)
+                .map(document -> {
+                    try {
+                        BlobClient blobClient = containerClient.getBlobClient(document.getBlobName());
+
+                        // Check if blob exists first
+                        if (!blobClient.exists()) {
+                            log.error("Blob not found: {}", document.getBlobName());
+                            return null;
+                        }
+
+                        // Set SAS permissions (only allow read)
+                        BlobSasPermission sasPermission = new BlobSasPermission()
+                                .setReadPermission(true);
+
+                        // Set expiry time
+                        OffsetDateTime expiryTime = OffsetDateTime.now().plusMinutes(expiryMinutes);
+
+                        // Generate SAS token with specified permissions and expiry time
+                        BlobServiceSasSignatureValues sasSignatureValues = new BlobServiceSasSignatureValues(
+                                expiryTime, sasPermission)
+                                .setProtocol(SasProtocol.HTTPS_ONLY);
+
+                        // Get SAS token and construct URL
+                        String sasToken = blobClient.generateSas(sasSignatureValues);
+                        String sasUrl = blobClient.getBlobUrl() + "?" + sasToken;
+
+                        // Update last access time
+                        document.setLastAccessDateTime(LocalDateTime.now());
+                        documentRepository.save(document);
+
+                        log.info("Generated SAS URL for document: {}, expires in {} minutes",
+                                document.getBlobName(), expiryMinutes);
+
+                        return sasUrl;
+                    } catch (Exception e) {
+                        log.error("Failed to generate SAS URL for document: {}", document.getBlobName(), e);
+                        return null;
+                    }
+                });
+    }
+
+    @Override
+    public List<DocumentDTO> getAllDocumentsWithPreview(int previewExpiryMinutes) {
+        List<Document> documents = documentRepository.findByActiveTrue();
+        return documents.stream()
+                .map(doc -> {
+                    DocumentDTO dto = documentUtils.convertToDTO(doc);
+                    generateSasUrl(doc.getId(), previewExpiryMinutes)
+                            .ifPresent(dto::setPreviewUrl);
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<DocumentDTO> getDocumentsByUserIdWithPreview(String userId, int previewExpiryMinutes) {
+        List<Document> userDocuments = documentRepository.findByUserIdAndActiveTrue(userId);
+        return userDocuments.stream()
+                .map(doc -> {
+                    DocumentDTO dto = documentUtils.convertToDTO(doc);
+                    generateSasUrl(doc.getId(), previewExpiryMinutes)
+                            .ifPresent(dto::setPreviewUrl);
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+
 }

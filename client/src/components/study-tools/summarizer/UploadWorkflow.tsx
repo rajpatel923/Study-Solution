@@ -135,29 +135,40 @@ export default function UploadWorkflow() {
 
   // Function to handle URL upload
   const handleUrlUpload = async (url: string) => {
-    setWorkflowState(WorkflowState.UPLOADING);
+    //setWorkflowState(WorkflowState.UPLOADING);
     
     try {
       // For URL uploads, you would normally send the URL to your backend
       // This is a simplified version - you'll need to implement this in your backend
-      const response = await documentService.uploadFromUrl(url);
+      // const response = await documentService.uploadFromUrl(url);
       
-      if (response && response.success) {
-        setUploadedFile({
-          id: response.id || 0,
-          name: response.fileName || "URL Document",
-          size: 0,
-          type: "application/pdf", // Assuming PDF
-          url: response.publicUrl || "",
-          pages: response.pageCount || 0
-        });
+      // if (response && response.success) {
+      //   setUploadedFile({
+      //     id: response.id || 0,
+      //     name: response.fileName || "URL Document",
+      //     size: 0,
+      //     type: "application/pdf", // Assuming PDF
+      //     url: response.publicUrl || "",
+      //     pages: response.pageCount || 0
+      //   });
         
-        setTimeout(() => {
-          setWorkflowState(WorkflowState.PREFERENCES);
-        }, 500);
-      } else {
-        throw new Error(response.message || "URL upload failed");
-      }
+      //   setTimeout(() => {
+      //     setWorkflowState(WorkflowState.PREFERENCES);
+      //   }, 500);
+      // } else {
+      //   throw new Error(response.message || "URL upload failed");
+      // }
+      setUploadedFile({
+        id: 0,
+        name: "URL Document",
+        size: 0,
+        type: "application/url",
+        url: url,
+        pages:0
+      })
+      setTimeout(() => {
+        setWorkflowState(WorkflowState.PREFERENCES)
+      }, 500)
     } catch (error: any) {
       console.error("Error with URL upload:", error);
       setErrorMessage(error.message || "URL upload is not fully supported yet");
@@ -217,13 +228,19 @@ export default function UploadWorkflow() {
   };
 
   // Function to handle preferences submission
-  const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
-    setWorkflowState(WorkflowState.PROCESSING);
-    setProcessingProgress(0);
+  // Function to handle preferences submission
+const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
+  setWorkflowState(WorkflowState.PROCESSING);
+  setProcessingProgress(0);
+  
+  try {
+    // Create a variable to track if this is a URL submission
+    const isUrlSubmission = uploadedFile && uploadedFile.type === "application/url";
     
-    try {
-      // Update document metadata with preferences
-      if (uploadedFile && uploadedFile.id) {
+    // Different handling based on submission type
+    if (uploadedFile) {
+      // For file uploads, update document metadata in the database
+      if (!isUrlSubmission && uploadedFile.id) {
         // Convert preferences to string/JSON for storage
         const metadata = JSON.stringify({
           title: preferences.title,
@@ -243,8 +260,6 @@ export default function UploadWorkflow() {
         
         // Update page count if it was provided in preferences
         if (preferences.pageRange === "custom" && preferences.customPageRange) {
-          // This is a simplification - in reality, you'd need more complex logic
-          // to calculate the actual page count from a custom range
           const pageCount = uploadedFile.pages; // Default to existing pages
           await documentService.updateDocumentPageCount(uploadedFile.id, pageCount);
         }
@@ -258,88 +273,99 @@ export default function UploadWorkflow() {
           publicUrl: uploadedFile.url,
           uploadedAt: new Date()
         });
+      } else if (isUrlSubmission) {
+        // For URL submissions, we don't need to update document metadata or page count
+        // Just add basic information to the app context if needed
+        addFile({
+          id: `url-${Date.now()}`, // Generate a temporary ID
+          name: preferences.title || uploadedFile.name,
+          type: uploadedFile.type,
+          size: 0,
+          publicUrl: uploadedFile.url,
+          uploadedAt: new Date()
+        });
+      }
+      
+      // Now create the summary request to the AI service
+      if (preferences.outputType !== "none") {
+        // Get the userId from your authentication context
+        const userId = "current-user-id"; // TODO: Replace with actual user ID from auth context
         
-        // Now create the summary request to the AI service
-        if (preferences.outputType !== "none") {
-          // Get the userId from your authentication context
-          // This is a placeholder - replace with your actual user ID retrieval method
-          const userId = "current-user-id"; // TODO: Replace with actual user ID from auth context
-          
-          // Create the summary request based on the output type
-          const summaryRequest: SummaryCreate = {
-            content_url: uploadedFile.url,
-            summary_length: preferences.noteLength === "in-depth" ? "long" : "medium",
-            tags: []
-          };
-          
-          // Add custom prompt if provided
-          if (preferences.customPrompt) {
-            summaryRequest.prompt = preferences.customPrompt;
-          } else {
-            // Create a prompt based on preferences
-            const outputTypePrompt = preferences.outputType === "notes" 
-              ? "Create detailed notes" 
-              : preferences.outputType === "flashcards"
-              ? "Create flashcards with questions and answers"
-              : preferences.outputType === "quiz"
-              ? "Create a quiz with questions and answers"
-              : "Summarize the document";
-              
-            const structurePrompt = preferences.structureFormat === "outline"
-              ? "in outline format"
-              : preferences.structureFormat === "paragraph"
-              ? "in paragraph format"
-              : preferences.structureFormat === "by-page"
-              ? "organized by page number"
-              : "";
-              
-            summaryRequest.prompt = `${outputTypePrompt} ${structurePrompt} in ${preferences.language} language.`;
-          }
-          
-          try {
-            // Send the request to the AI service
-            const summaryResponse = await summaryService.createSummary(summaryRequest);
-            
-            // Handle the response based on its status
-            if (summaryResponse.status === 'success') {
-              // Summary is immediately available
-              console.log("Summary created successfully:", summaryResponse.summary_id);
-              setSummaryId(summaryResponse.summary_id);
-              setProcessingProgress(100);
-              setTimeout(() => {
-                setWorkflowState(WorkflowState.COMPLETE);
-                toast.success("Summary created successfully!");
-              }, 500);
-            } else if (summaryResponse.status === 'processing') {
-              // Summary is being processed, start polling for updates
-              setSummaryId(summaryResponse.summary_id || "");
-              if (summaryResponse.summary_id) {
-                pollSummaryStatus(summaryResponse.summary_id);
-              } else {
-                throw new Error("No summary ID received from server");
-              }
-            } else {
-              // Error occurred
-              throw new Error(summaryResponse.error_message || "Summary generation failed");
-            }
-          } catch (error: any) {
-            console.error("Error creating summary:", error);
-            setErrorMessage(error.message || "Summary generation failed");
-            setWorkflowState(WorkflowState.ERROR);
-          }
+        // Create the summary request based on the output type
+        const summaryRequest: SummaryCreate = {
+          content_url: uploadedFile.url,
+          summary_length: preferences.noteLength === "in-depth" ? "long" : "medium",
+          tags: []
+        };
+        
+        // Add custom prompt if provided
+        if (preferences.customPrompt) {
+          summaryRequest.prompt = preferences.customPrompt;
         } else {
-          // No summary requested, go to complete state
-          setWorkflowState(WorkflowState.COMPLETE);
+          // Create a prompt based on preferences
+          const outputTypePrompt = preferences.outputType === "notes" 
+            ? "Create detailed notes" 
+            : preferences.outputType === "flashcards"
+            ? "Create flashcards with questions and answers"
+            : preferences.outputType === "quiz"
+            ? "Create a quiz with questions and answers"
+            : "Summarize the document";
+            
+          const structurePrompt = preferences.structureFormat === "outline"
+            ? "in outline format"
+            : preferences.structureFormat === "paragraph"
+            ? "in paragraph format"
+            : preferences.structureFormat === "by-page"
+            ? "organized by page number"
+            : "";
+            
+          summaryRequest.prompt = `${outputTypePrompt} ${structurePrompt} in ${preferences.language} language.`;
+        }
+        
+        try {
+          // Send the request to the AI service
+          const summaryResponse = await summaryService.createSummary(summaryRequest);
+          
+          // Handle the response based on its status
+          if (summaryResponse.status === 'success') {
+            // Summary is immediately available
+            console.log("Summary created successfully:", summaryResponse.summary_id);
+            setSummaryId(summaryResponse.summary_id);
+            setProcessingProgress(100);
+            setTimeout(() => {
+              setWorkflowState(WorkflowState.COMPLETE);
+              toast.success("Summary created successfully!");
+            }, 500);
+          } else if (summaryResponse.status === 'processing') {
+            // Summary is being processed, start polling for updates
+            setSummaryId(summaryResponse.summary_id || "");
+            if (summaryResponse.summary_id) {
+              pollSummaryStatus(summaryResponse.summary_id);
+            } else {
+              throw new Error("No summary ID received from server");
+            }
+          } else {
+            // Error occurred
+            throw new Error(summaryResponse.error_message || "Summary generation failed");
+          }
+        } catch (error: any) {
+          console.error("Error creating summary:", error);
+          setErrorMessage(error.message || "Summary generation failed");
+          setWorkflowState(WorkflowState.ERROR);
         }
       } else {
-        throw new Error("No file upload information found");
+        // No summary requested, go to complete state
+        setWorkflowState(WorkflowState.COMPLETE);
       }
-    } catch (error: any) {
-      console.error("Error processing document:", error);
-      setErrorMessage(error.message || "Unknown error during processing");
-      setWorkflowState(WorkflowState.ERROR);
+    } else {
+      throw new Error("No file upload information found");
     }
-  };
+  } catch (error: any) {
+    console.error("Error processing document:", error);
+    setErrorMessage(error.message || "Unknown error during processing");
+    setWorkflowState(WorkflowState.ERROR);
+  }
+};
 
   // Reset the workflow
   const resetWorkflow = () => {

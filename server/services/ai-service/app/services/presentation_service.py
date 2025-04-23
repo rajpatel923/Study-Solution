@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class PresentationFeedbackService:
     """Service for providing feedback on presentations"""
 
-    def __init__(self, llm_model: str = "gpt-4-turbo"):
+    def __init__(self, llm_model: str = "gpt-4o"):
         """Initialize with specific model"""
         self.llm_model = llm_model
         self.feedback_graph = self._build_feedback_graph()
@@ -192,136 +192,138 @@ class PresentationFeedbackService:
         return feedback_text, feedback_structure
 
 
-class EnhancedVoiceAssistantService:
-    """Enhanced service with presentation and feedback capabilities"""
-
-    def __init__(self,
-                 llm_model: str = "gpt-4-turbo",
-                 feedback_model: str = "gpt-4-turbo"):
-        """Initialize the service"""
-        self.llm_model = llm_model
-        self.feedback_service = PresentationFeedbackService(feedback_model)
-
-        # Tracking presentation transcriptions for feedback
-        self.presentation_transcriptions = {}  # session_id -> {slide_num: transcription}
-
-    async def record_presentation_transcription(
-            self,
-            session_id: str,
-            slide_number: int,
-            transcription: str
-    ):
-        """
-        Record transcription for a presentation slide for later feedback
-
-        Args:
-            session_id: Session identifier
-            slide_number: Slide being presented
-            transcription: Transcribed text from the presenter
-        """
-        if session_id not in self.presentation_transcriptions:
-            self.presentation_transcriptions[session_id] = {}
-
-        self.presentation_transcriptions[session_id][slide_number] = transcription
-
-    async def generate_slide_presentation(
-            self,
-            session_id: str,
-            slide_number: int,
-            slide_content: str,
-            student_persona: Dict[str, Any]
-    ) -> str:
-        """
-        Generate AI presentation for a slide
-
-        Args:
-            session_id: Session identifier
-            slide_number: Slide being presented
-            slide_content: Content of the slide
-            student_persona: Persona to use for the presentation
-
-        Returns:
-            str: Generated presentation text
-        """
-        # Use ChatOpenAI directly for this simpler task
-        llm = ChatOpenAI(model=self.llm_model, temperature=0.7)
-
-        # Prepare system prompt based on persona
-        system_prompt = f"""You are a {student_persona.get('age', '20')}-year-old {student_persona.get('year', 'college')} student 
-        named {student_persona.get('name', 'Alex')} majoring in {student_persona.get('major', 'Computer Science')}.
-        You are giving a presentation and presenting slide {slide_number}.
-        Speak in a {student_persona.get('tone', 'enthusiastic but informative')} tone with a 
-        {student_persona.get('speaking_style', 'conversational with occasional academic terminology')} style.
-        Keep your presentation of this slide concise and engaging.
-        Don't say "In this slide..." or use similar meta-references.
-        Just present the content naturally as if speaking to your class."""
-
-        human_prompt = f"""Here is the content of slide {slide_number}:
-
-        {slide_content}
-
-        Please present this slide content in your own words.
-        """
-
-        # Generate presentation text
-        response = await llm.ainvoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt)
-        ])
-
-        return response.content
-
-    async def generate_presentation_feedback(
-            self,
-            session_id: str,
-            slide_numbers: List[int],
-            slide_contents: Dict[int, str],
-            presenter_persona: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Generate feedback for presenter slides
-
-        Args:
-            session_id: Session identifier
-            slide_numbers: List of slide numbers the user presented
-            slide_contents: Mapping of slide numbers to content
-            presenter_persona: Optional persona information for tailored feedback
-
-        Returns:
-            Dict with feedback information
-        """
-        if session_id not in self.presentation_transcriptions:
-            return {
-                "error": "No presentation transcriptions found for this session",
-                "feedback": "Unable to provide feedback without presentation recording."
-            }
-
-        # Combine transcriptions for all presented slides
-        combined_transcription = ""
-        combined_slide_content = ""
-
-        for slide_num in slide_numbers:
-            if slide_num in self.presentation_transcriptions[session_id]:
-                combined_transcription += f"Slide {slide_num}: {self.presentation_transcriptions[session_id][slide_num]}\n\n"
-
-            if slide_num in slide_contents:
-                combined_slide_content += f"Slide {slide_num}: {slide_contents[slide_num]}\n\n"
-
-        if not combined_transcription:
-            return {
-                "error": "No transcriptions found for the specified slides",
-                "feedback": "Unable to provide feedback without presentation recording."
-            }
-
-        # Generate feedback using the feedback service
-        feedback_text, feedback_structure = await self.feedback_service.generate_presentation_feedback(
-            combined_transcription,
-            combined_slide_content,
-            presenter_persona
-        )
-
-        return {
-            "feedback_text": feedback_text,
-            "structured_feedback": feedback_structure,
-            "slides_analyzed": slide_numbers
-        }
+# class EnhancedVoiceAssistantService:
+#     """Enhanced service with presentation and feedback capabilities"""
+#
+#     def __init__(self,
+#                  llm_model: str = "gpt-4o",
+#                  feedback_model: str = "gpt-4o"):
+#         """Initialize the service"""
+#         self.llm_model = llm_model
+#         self.feedback_service = PresentationFeedbackService(feedback_model)
+#
+#         # Tracking presentation transcriptions for feedback
+#         self.presentation_transcriptions = {}  # session_id -> {slide_num: transcription}
+#
+#     async def record_presentation_transcription(
+#             self,
+#             session_id: str,
+#             slide_number: int,
+#             transcription: str
+#     ):
+#         """
+#         Record transcription for a presentation slide for later feedback
+#
+#         Args:
+#             session_id: Session identifier
+#             slide_number: Slide being presented
+#             transcription: Transcribed text from the presenter
+#         """
+#         if session_id not in self.presentation_transcriptions:
+#             self.presentation_transcriptions[session_id] = {}
+#
+#         self.presentation_transcriptions[session_id][slide_number] = transcription
+#
+#     async def generate_slide_presentation(
+#             self,
+#             session_id: str,
+#             slide_number: int,
+#             slide_content: str,
+#             student_persona: Dict[str, Any]
+#     ) -> str:
+#         """
+#         Generate AI presentation for a slide
+#
+#         Args:
+#             session_id: Session identifier
+#             slide_number: Slide being presented
+#             slide_content: Content of the slide
+#             student_persona: Persona to use for the presentation
+#
+#         Returns:
+#             str: Generated presentation text
+#         """
+#         # Use ChatOpenAI directly for this simpler task
+#
+#         logger.log(logging.DEBUG, "Generating presentation for slide {slide_number}")
+#         llm = ChatOpenAI(model=self.llm_model, temperature=0.7)
+#
+#         # Prepare system prompt based on persona
+#         system_prompt = f"""You are a {student_persona.get('age', '20')}-year-old {student_persona.get('year', 'college')} student
+#         named {student_persona.get('name', 'Alex')} majoring in {student_persona.get('major', 'Computer Science')}.
+#         You are giving a presentation and presenting slide {slide_number}.
+#         Speak in a {student_persona.get('tone', 'enthusiastic but informative')} tone with a
+#         {student_persona.get('speaking_style', 'conversational with occasional academic terminology')} style.
+#         Keep your presentation of this slide concise and engaging.
+#         Don't say "In this slide..." or use similar meta-references.
+#         Just present the content naturally as if speaking to your class."""
+#
+#         human_prompt = f"""Here is the content of slide {slide_number}:
+#
+#         {slide_content}
+#
+#         Please present this slide content in your own words.
+#         """
+#
+#         # Generate presentation text
+#         response = await llm.ainvoke([
+#             SystemMessage(content=system_prompt),
+#             HumanMessage(content=human_prompt)
+#         ])
+#
+#         return response.content
+#
+#     async def generate_presentation_feedback(
+#             self,
+#             session_id: str,
+#             slide_numbers: List[int],
+#             slide_contents: Dict[int, str],
+#             presenter_persona: Optional[Dict[str, Any]] = None
+#     ) -> Dict[str, Any]:
+#         """
+#         Generate feedback for presenter slides
+#
+#         Args:
+#             session_id: Session identifier
+#             slide_numbers: List of slide numbers the user presented
+#             slide_contents: Mapping of slide numbers to content
+#             presenter_persona: Optional persona information for tailored feedback
+#
+#         Returns:
+#             Dict with feedback information
+#         """
+#         if session_id not in self.presentation_transcriptions:
+#             return {
+#                 "error": "No presentation transcriptions found for this session",
+#                 "feedback": "Unable to provide feedback without presentation recording."
+#             }
+#
+#         # Combine transcriptions for all presented slides
+#         combined_transcription = ""
+#         combined_slide_content = ""
+#
+#         for slide_num in slide_numbers:
+#             if slide_num in self.presentation_transcriptions[session_id]:
+#                 combined_transcription += f"Slide {slide_num}: {self.presentation_transcriptions[session_id][slide_num]}\n\n"
+#
+#             if slide_num in slide_contents:
+#                 combined_slide_content += f"Slide {slide_num}: {slide_contents[slide_num]}\n\n"
+#
+#         if not combined_transcription:
+#             return {
+#                 "error": "No transcriptions found for the specified slides",
+#                 "feedback": "Unable to provide feedback without presentation recording."
+#             }
+#
+#         # Generate feedback using the feedback service
+#         feedback_text, feedback_structure = await self.feedback_service.generate_presentation_feedback(
+#             combined_transcription,
+#             combined_slide_content,
+#             presenter_persona
+#         )
+#
+#         return {
+#             "feedback_text": feedback_text,
+#             "structured_feedback": feedback_structure,
+#             "slides_analyzed": slide_numbers
+#         }

@@ -5,6 +5,7 @@ from langchain_ollama.llms import OllamaLLM
 from langchain.prompts import PromptTemplate
 from app.utils.content_loader import load_content, detect_content_type
 from app.utils.db_utils import get_mongodb_client
+from app.utils.db_utils import serialize_mongo_doc
 from bson import ObjectId
 import os
 import re
@@ -38,11 +39,8 @@ def get_flashcard_by_id(flashcard_id: str, x_user_id: str = None) -> dict:
                 "message": f"Flashcard with ID {flashcard_id} not found"
             }
 
-        # Convert ObjectId to string for JSON serialization
-        flashcard["_id"] = str(flashcard["_id"])
-        flashcard["document_id"] = str(flashcard["document_id"])
-        if "flashcard_set_id" in flashcard:
-            flashcard["flashcard_set_id"] = str(flashcard["flashcard_set_id"])
+        # Use the serialization utility
+        flashcard = serialize_mongo_doc(flashcard)
 
         # Get related flashcards if x_user_id is provided
         if x_user_id:
@@ -53,12 +51,6 @@ def get_flashcard_by_id(flashcard_id: str, x_user_id: str = None) -> dict:
             else:
                 # Fall back to document-based retrieval if no set ID
                 flashcards = get_flashcards_by_document(flashcard.get("document_id"), x_user_id)
-
-        # Convert datetime objects to ISO strings
-        if flashcard.get("created_at"):
-            flashcard["created_at"] = flashcard["created_at"].isoformat()
-        if flashcard.get("last_reviewed"):
-            flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
 
         return {
             "status": "success",
@@ -102,17 +94,9 @@ def get_flashcards_for_user(user_id: str, limit: int = 50, filters: dict = None)
 
         flashcards = []
         for flashcard in cursor:
-            # Convert ObjectId to string for JSON serialization
-            flashcard["_id"] = str(flashcard["_id"])
-            flashcard["document_id"] = str(flashcard["document_id"])
-
-            # Convert datetime objects to ISO format
-            if flashcard.get("created_at"):
-                flashcard["created_at"] = flashcard["created_at"].isoformat()
-            if flashcard.get("last_reviewed"):
-                flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
-
-            flashcards.append(flashcard)
+            # Use the serialization utility
+            serialized_flashcard = serialize_mongo_doc(flashcard)
+            flashcards.append(serialized_flashcard)
 
         return {
             "status": "success",
@@ -157,11 +141,8 @@ def get_flashcards_by_document(document_id: str, user_id: str) -> dict:
                 "message": f"Flashcard set for document {document_id} not found"
             }
 
-        # Convert ObjectIds to strings
-        flashcard_set["_id"] = str(flashcard_set["_id"])
-        flashcard_set["document_id"] = str(flashcard_set["document_id"])
-        if flashcard_set.get("created_at"):
-            flashcard_set["created_at"] = flashcard_set["created_at"].isoformat()
+        # Use the serialization utility
+        flashcard_set = serialize_mongo_doc(flashcard_set)
 
         # Get all flashcards for this document and user
         flashcards_collection = db["flashcards"]
@@ -172,17 +153,9 @@ def get_flashcards_by_document(document_id: str, user_id: str) -> dict:
 
         flashcards = []
         for flashcard in cursor:
-            # Convert ObjectId to string for JSON serialization
-            flashcard["_id"] = str(flashcard["_id"])
-            flashcard["document_id"] = str(flashcard["document_id"])
-
-            # Convert datetime objects to ISO format
-            if flashcard.get("created_at"):
-                flashcard["created_at"] = flashcard["created_at"].isoformat()
-            if flashcard.get("last_reviewed"):
-                flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
-
-            flashcards.append(flashcard)
+            # Use the serialization utility
+            serialized_flashcard = serialize_mongo_doc(flashcard)
+            flashcards.append(serialized_flashcard)
 
         return {
             "status": "success",
@@ -1044,11 +1017,8 @@ def get_flashcards_by_set(flashcard_set_id: str, user_id: str) -> dict:
                 "message": f"Flashcard set :- {flashcard_set_id} not found"
             }
 
-        # Convert ObjectIds to strings
-        flashcard_set["_id"] = str(flashcard_set["_id"])
-        flashcard_set["document_id"] = str(flashcard_set["document_id"])
-        if flashcard_set.get("created_at"):
-            flashcard_set["created_at"] = flashcard_set["created_at"].isoformat()
+        # Use the serialization utility
+        flashcard_set = serialize_mongo_doc(flashcard_set)
 
         # Get all flashcards for this set and user
         flashcards_collection = db["flashcards"]
@@ -1059,18 +1029,9 @@ def get_flashcards_by_set(flashcard_set_id: str, user_id: str) -> dict:
 
         flashcards = []
         for flashcard in cursor:
-            # Convert ObjectId to string for JSON serialization
-            flashcard["_id"] = str(flashcard["_id"])
-            flashcard["document_id"] = str(flashcard["document_id"])
-            flashcard["flashcard_set_id"] = str(flashcard["flashcard_set_id"])
-
-            # Convert datetime objects to ISO format
-            if flashcard.get("created_at"):
-                flashcard["created_at"] = flashcard["created_at"].isoformat()
-            if flashcard.get("last_reviewed"):
-                flashcard["last_reviewed"] = flashcard["last_reviewed"].isoformat()
-
-            flashcards.append(flashcard)
+            # Use the serialization utility
+            serialized_flashcard = serialize_mongo_doc(flashcard)
+            flashcards.append(serialized_flashcard)
 
         return {
             "status": "success",
@@ -1085,4 +1046,40 @@ def get_flashcards_by_set(flashcard_set_id: str, user_id: str) -> dict:
         return {
             "status": "error",
             "message": error_message
+        }
+
+
+def get_flashcard_sets_for_user(user_id: str) -> dict:
+    """
+    Retrieve all flashcard sets for a specific user.
+    """
+    try:
+        db_client = get_mongodb_client()
+        db = db_client["ai_service"]
+
+        # Find all flashcard sets for this user
+        flashcard_sets_cursor = db.flashcard_sets.find({"user_id": user_id})
+
+        # Convert cursor to list and handle ObjectId serialization
+        flashcard_sets = []
+        for set_data in flashcard_sets_cursor:
+            # Convert ObjectId to string
+            set_data["_id"] = str(set_data["_id"])
+            # Also convert any other ObjectId fields
+            if "document_id" in set_data and isinstance(set_data["document_id"], ObjectId):
+                set_data["document_id"] = str(set_data["document_id"])
+            flashcard_sets.append(set_data)
+
+        return {
+            "status": "success",
+            "flashcard_sets": flashcard_sets,
+            "count": len(flashcard_sets)
+        }
+    except Exception as e:
+        import traceback
+        print(f"Error retrieving flashcard sets: {str(e)}")
+        print(traceback.format_exc())
+        return {
+            "status": "error",
+            "message": f"Failed to retrieve flashcard sets: {str(e)}"
         }

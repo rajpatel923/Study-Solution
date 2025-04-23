@@ -30,8 +30,7 @@ export interface SummaryUpdate {
 }
 
 // Use environment variable with fallback
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8098/api/v1";
+const API_BASE_URL = "http://localhost:8098/api/v1";
 
 // Create an axios instance with default configs
 const api = axios.create({
@@ -49,7 +48,6 @@ const summaryService = {
   createSummary: async (
     summaryData: SummaryCreate
   ): Promise<SummaryResponse> => {
-    console.log(summaryData);
     try {
       const response: AxiosResponse<SummaryResponse> = await api.post(
         "/",
@@ -128,8 +126,14 @@ const summaryService = {
   ): Promise<SummaryResponse> => {
     try {
       const response: AxiosResponse<SummaryResponse> = await api.get(
-        `/?user_id=${userId}&limit=${limit}`
+        `/?user_id=${userId}&limit=${limit}`,
+        {
+          headers: {
+            "X-User-ID": userId,
+          },
+        }
       );
+      console.log("User summaries response:", response.data);
       return response.data;
     } catch (error: any) {
       const errorMessage =
@@ -147,7 +151,7 @@ const summaryService = {
   ): Promise<SummaryResponse> => {
     try {
       // Get the user ID - in a real app, this would come from authentication
-      const userId = "current-user-id"; // Replace with actual user ID when available
+      const userId = "user123"; // Replace with actual user ID when available
 
       // Ensure user_id is included
       const finalUpdateData = {
@@ -161,7 +165,12 @@ const summaryService = {
 
       const response: AxiosResponse<SummaryResponse> = await api.patch(
         `/${summaryId}`,
-        finalUpdateData
+        finalUpdateData,
+        {
+          headers: {
+            "X-User-ID": "user123",
+          },
+        }
       );
 
       if (showToast) {

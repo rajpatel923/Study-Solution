@@ -1,0 +1,36 @@
+server:
+  port: 8085
+spring:
+  application:
+    name: group-service
+  data:
+    mongodb:
+      username: StudySolution
+      password: StudySolution
+      host: localhost
+      port: 27017
+      database: group-service
+      authentication-database: admin
+      auto-index-creation: true
+  cloud:
+    config:
+      enabled: false
+    loadbalancer:
+      ribbon:
+        enabled: false
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    preferIpAddress: true
+
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+        loggerLevel: basic

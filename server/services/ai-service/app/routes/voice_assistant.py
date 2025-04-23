@@ -1,11 +1,11 @@
 import logging
 from fastapi import APIRouter, HTTPException, Body, Query, BackgroundTasks
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from pydantic import BaseModel
 from datetime import datetime
 import asyncio
 
-from app.utils.powerpoint_utils import process_powerpoint_from_base64, SlideExtract, PresentationExtract
+from app.utils.powerpoint_utils import process_powerpoint_from_url, SlideExtract, PresentationExtract
 from app.services.voice_assistant_service import voice_assistant_service
 from app.config import get_settings
 from app.utils.websocket_manager import websocket_manager
@@ -28,7 +28,7 @@ session_storage = {}
 # Input models
 class PresentationProcessRequest(BaseModel):
     """Request model for processing PowerPoint files"""
-    presentation_data: str  # Base64 encoded file data
+    presentation_url: str  # Azure Blob Storage URL
     session_id: str
 
 
@@ -57,12 +57,6 @@ class PresentationSetupRequest(BaseModel):
     student_persona: Optional[Dict[str, Any]] = None
 
 
-class PresentationFeedbackRequest(BaseModel):
-    """Request model for generating presentation feedback"""
-    session_id: str
-    slide_numbers: List[int]
-
-
 # Response models
 class ProcessedPresentationResponse(BaseModel):
     """Response model for processed presentation"""
@@ -70,20 +64,13 @@ class ProcessedPresentationResponse(BaseModel):
     total_slides: int
     slides: List[Dict[str, Any]]
 
-
-class PresentationFeedbackResponse(BaseModel):
-    """Response model for presentation feedback"""
-    feedback_text: str
-    structured_feedback: Optional[Dict[str, Any]] = None
-    slides_analyzed: List[int]
-
-
 # Helper function for background processing
-async def process_presentation_in_background(session_id: str, presentation_data: str):
+async def process_presentation_in_background(session_id: str, presentation_url: str):
     """Process a presentation in the background to avoid blocking"""
     try:
-        # Process the PowerPoint from base64 data
-        presentation_extract = await process_powerpoint_from_base64(presentation_data)
+        # Process the PowerPoint from Azure Blob Storage URL
+        logger.info(f"Processing PowerPoint from URL: {presentation_url}")
+        presentation_extract = await process_powerpoint_from_url(presentation_url)
 
         # Convert to response format
         slides_data = []
@@ -137,10 +124,10 @@ async def process_presentation(
         background_tasks: BackgroundTasks = None
 ):
     """
-    Process a PowerPoint file and extract its content
+    Process a PowerPoint file from Azure Blob Storage URL and extract its content
 
     Args:
-        request (PresentationProcessRequest): Request body with presentation data
+        request (PresentationProcessRequest): Request body with presentation URL
         background_tasks: BackgroundTasks for running background processing
 
     Returns:
@@ -158,13 +145,13 @@ async def process_presentation(
             background_tasks.add_task(
                 process_presentation_in_background,
                 request.session_id,
-                request.presentation_data
+                request.presentation_url
             )
         else:
             # If BackgroundTasks is not available, create a task directly
             asyncio.create_task(process_presentation_in_background(
                 request.session_id,
-                request.presentation_data
+                request.presentation_url
             ))
 
         # Notify client that processing has started (if websocket connected)
@@ -179,12 +166,7 @@ async def process_presentation(
 
         # For synchronous API, we'll process enough to return a response
         # This performs a minimal initial processing for immediate response
-        presentation_extract = await process_powerpoint_from_base64(
-            request.presentation_data
-            # Remove the parameters that aren't supported
-            # process_all_slides=False,
-            # max_slides=1
-        )
+        presentation_extract = await process_powerpoint_from_url(request.presentation_url)
 
         # Create a minimal initial response
         initial_slides = []
@@ -212,7 +194,26 @@ async def process_presentation(
 
         raise HTTPException(status_code=500, detail=f"Error processing presentation: {str(e)}")
 
+
+async def process_presentation_turn(
+        self,
+        session_id: str,
+        slide_number: int
+) -> Tuple[str, bytes]:
+    """
+    Process a turn in the presentation
+
+    Args:
+        session_id: Session identifier
+        slide_number: Current slide number
+
+    Returns:
+        Tuple[str, bytes]: Assistant's text response and audio response
+    """
+    # This is a wrapper that calls the enhanced version
+    return await self.process_presentation_turn_enhanced(session_id, slide_number)
 # Helper function for presentation setup
+# In voice_assistant.py, modify the setup_presentation_background function:
 async def setup_presentation_background(
         session_id: str,
         presenter_ranges: List[PresentationSlideRange],
@@ -220,7 +221,6 @@ async def setup_presentation_background(
         presentation_topic: Optional[str],
         student_persona: Optional[Dict[str, Any]]
 ):
-    """Set up a presentation in the background"""
     try:
         # Get the processed slides from session storage
         if session_id not in session_storage or not session_storage[session_id].get("processed"):
@@ -236,7 +236,7 @@ async def setup_presentation_background(
 
         session_data = session_storage[session_id]
 
-        # Convert slide_contents to the format expected by the voice assistant service
+        # Convert slide_contents to the dictionary format expected by the voice assistant service
         slide_contents = {}
         for slide in session_data["slides"]:
             content = f"{slide.get('title', '')}\n\n{slide.get('content', '')}"
@@ -248,6 +248,13 @@ async def setup_presentation_background(
         presenter_ranges_tuples = []
         for range_obj in presenter_ranges:
             presenter_ranges_tuples.append((range_obj.start, range_obj.end))
+
+        # Add debug logging
+        logger.info(f"Setting up presentation for session {session_id}")
+        logger.info(f"Slide contents: {list(slide_contents.keys())}")
+        logger.info(f"Presenter ranges: {presenter_ranges_tuples}")
+        logger.info(f"Title: {presentation_title or session_data['title']}")
+        logger.info(f"Student persona: {student_persona}")
 
         # Notify client that setup is starting
         if websocket_manager.is_connected(session_id):
@@ -264,12 +271,20 @@ async def setup_presentation_background(
         success = await asyncio.to_thread(
             voice_assistant_service.setup_presentation,
             session_id=session_id,
-            slide_contents=slide_contents,
+            slide_contents=slide_contents,  # Using dictionary format
             presenter_ranges=presenter_ranges_tuples,
             presentation_title=presentation_title or session_data["title"],
             presentation_topic=presentation_topic or session_data["title"],
             student_persona=student_persona
         )
+
+        # Additional logging for success/failure
+        if success:
+            logger.info(f"Successfully set up presentation for session {session_id}")
+        else:
+            logger.error(f"Failed to setup presentation for session {session_id}")
+
+        # Rest of the function remains the same...
 
         if not success:
             logger.error(f"Failed to setup presentation for session {session_id}")
@@ -309,6 +324,8 @@ async def setup_presentation_background(
                     "message": f"Error setting up presentation: {str(e)}"
                 }
             })
+
+
 
 
 @router.post("/setup", response_model=Dict[str, Any])
@@ -372,6 +389,8 @@ async def setup_presentation(
     except Exception as e:
         logger.error(f"Error starting presentation setup: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error setting up presentation: {str(e)}")
+
+
 
 
 @router.get("/state", response_model=Dict[str, Any])

@@ -8,10 +8,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="config-server" />
+        <module name="group-service" />
         <module name="discovery" />
         <module name="gateway-service" />
       </profile>
-      <profile name="Annotation profile for document-uploader" enabled="true">
+      <profile name="Annotation profile for user-profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
@@ -29,6 +30,7 @@
       <module name="discovery" options="-parameters" />
       <module name="document-uploader" options="-parameters" />
       <module name="gateway-service" options="-parameters" />
+      <module name="group-service" options="-parameters" />
       <module name="user-profile" options="-parameters" />
     </option>
   </component>

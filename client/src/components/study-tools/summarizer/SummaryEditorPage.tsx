@@ -25,8 +25,6 @@ const SummaryEditPage = () => {
   const rawSummaryId = params?.summaryId;
   const summaryId = Array.isArray(rawSummaryId) ? rawSummaryId[0] : rawSummaryId;
   
-  console.log("Raw params:", params);
-  console.log("Extracted summaryId:", summaryId);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,7 +55,7 @@ const SummaryEditPage = () => {
         const result = await summaryService.getSummaryById(summaryId, userId);
         
         if (result.status === "success" && result.summary) {
-          console.log("Received summary content:", result.summary.substring(0, 100) + "...");
+          
           
           // The key part: Set the raw markdown content
           // TipTap with Markdown extension will parse it correctly

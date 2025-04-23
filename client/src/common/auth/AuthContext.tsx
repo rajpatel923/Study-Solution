@@ -58,7 +58,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (response.ok) {
           const userData = await response.json();
+          
           setUser(userData);
+          
           setIsAuthenticated(true);
         } else {
           // If getting user data fails, try to refresh token
@@ -97,6 +99,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const meResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
           credentials: 'include',
         });
+
+        
         
         if (meResponse.ok) {
           const userData = await meResponse.json();

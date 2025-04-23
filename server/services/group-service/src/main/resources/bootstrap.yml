@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: group-service
+  cloud:
+    config:
+      uri: http://config-server:8888
+      fail-fast: true
+      retry:
+        initial-interval: 1500
+        multiplier: 1.5
+        max-attempts: 6
+        max-interval: 10000

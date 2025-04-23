@@ -20,6 +20,7 @@ public class DocumentDTO {
     private String contentType;
     private Long fileSize;
     private String publicUrl;
+    private String previewUrl;
     private Integer pageCount;
     private String fileExtension;
     private String metadata;

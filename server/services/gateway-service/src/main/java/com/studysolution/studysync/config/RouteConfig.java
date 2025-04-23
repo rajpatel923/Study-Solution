@@ -24,6 +24,10 @@ public class RouteConfig {
                         .path("/aiservice/**")
                         .filters(f -> f.stripPrefix(1))
                         .uri("lb://AI-SERVICE"))
+                .route("group-service", r -> r
+                        .path("/groupservice/**")
+                        .filters(f -> f.stripPrefix(1))
+                        .uri("lb://group-service"))
                 .build();
     }
 }

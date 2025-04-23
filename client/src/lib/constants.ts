@@ -95,19 +95,19 @@ export const sideBarData = {
       items: [
         {
           title: "home",
-          url: "/public/dashboard/groups",
+          url: "/dashboard/groups",
         },
         {
           title: "StudyGroup1",
-          url: "/public/dashboard/groups/1",
+          url: "/dashboard/groups/1",
         },
         {
           title: "StudyGroup2",
-          url: "/public/dashboard/groups/2",
+          url: "/dashboard/groups/2",
         },
         {
           title: "StudyGroup3",
-          url: "/public/dashboard/groups/3",
+          url: "/dashboard/groups/3",
         },
       ],
     },

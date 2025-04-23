@@ -414,6 +414,9 @@ async def handle_text_message(session_id: str, data: Dict[str, Any]):
 
                     # Send binary audio response
                     if audio_response and websocket_manager.is_connected(session_id):
+
+                        await websocket_manager.send_bytes(session_id, audio_response)
+
                         # Send playback start notification
                         await websocket_manager.send_json(session_id, {
                             "type": "control",
@@ -423,7 +426,6 @@ async def handle_text_message(session_id: str, data: Dict[str, Any]):
                             }
                         })
 
-                        await websocket_manager.send_bytes(session_id, audio_response)
 
                     # Send processing end notification
                     if websocket_manager.is_connected(session_id):
@@ -481,6 +483,8 @@ async def handle_text_message(session_id: str, data: Dict[str, Any]):
 
                     # Send binary audio response
                     if audio_response and websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_bytes(session_id, audio_response)
+
                         # Send playback start notification
                         await websocket_manager.send_json(session_id, {
                             "type": "control",
@@ -490,7 +494,7 @@ async def handle_text_message(session_id: str, data: Dict[str, Any]):
                             }
                         })
 
-                        await websocket_manager.send_bytes(session_id, audio_response)
+
 
                     # Send processing end notification if still connected
                     if websocket_manager.is_connected(session_id):
@@ -551,6 +555,474 @@ async def handle_text_message(session_id: str, data: Dict[str, Any]):
                     })
 
 
+async def handle_text_message_enhanced(session_id: str, data: Dict[str, Any]):
+    """
+    Enhanced handler for text/JSON messages from the client with better presentation support
+
+    Args:
+        session_id (str): Session identifier
+        data (Dict[str, Any]): Message data
+    """
+    if not websocket_manager.is_connected(session_id):
+        logger.warning(f"Attempt to handle message for disconnected session: {session_id}")
+        return
+
+    message_type = data.get("type", "")
+    logger.info(f"Handling message type '{message_type}' for session {session_id}")
+
+    # Handle different message types
+    if message_type == "init":
+        # Handle initialization message
+        logger.info(f"Initializing session {session_id}")
+        await websocket_manager.send_json(session_id, {
+            "type": "control",
+            "data": {
+                "action": "initialized",
+                "target": "session"
+            }
+        })
+
+    elif message_type == "ping":
+        # Respond to ping
+        await websocket_manager.send_json(session_id, {
+            "type": "pong"
+        })
+
+    elif message_type == "text":
+        # Process text from user
+        user_message = data.get("data", {}).get("text", "")
+        if user_message:
+            # Send processing start notification
+            await websocket_manager.send_json(session_id, {
+                "type": "control",
+                "data": {
+                    "action": "start",
+                    "target": "processing"
+                }
+            })
+
+            try:
+                # Check if this is a presentation session
+                is_presentation = False
+                if hasattr(voice_assistant_service,
+                           'presentation_states') and session_id in voice_assistant_service.presentation_states:
+                    is_presentation = voice_assistant_service.presentation_states[session_id].presentation_active
+
+                # Handle presentation-related commands
+                if is_presentation and any(cmd in user_message.lower() for cmd in
+                                           ["next slide", "advance slide", "continue", "move on", "go ahead"]):
+                    # Create a task to handle slide advancement
+                    websocket_manager.create_task(
+                        session_id,
+                        handle_text_message(session_id, {
+                            "type": "presentation_control",
+                            "data": {
+                                "action": "advance_slide"
+                            }
+                        })
+                    )
+                    # Skip normal message processing
+                    return
+                elif is_presentation and any(cmd in user_message.lower() for cmd in
+                                             ["end presentation", "finish presentation", "conclude", "wrap up"]):
+                    # Create a task to handle presentation ending
+                    websocket_manager.create_task(
+                        session_id,
+                        handle_text_message(session_id, {
+                            "type": "presentation_control",
+                            "data": {
+                                "action": "end_presentation"
+                            }
+                        })
+                    )
+                    # Skip normal message processing
+                    return
+                elif is_presentation and any(cmd in user_message.lower() for cmd in
+                                             ["feedback", "how did i do", "evaluate", "assess"]):
+                    # Generate and send feedback
+                    feedback_text, audio_response = await voice_assistant_service.generate_comprehensive_feedback(
+                        session_id)
+
+                    # Send text response
+                    await websocket_manager.send_json(session_id, {
+                        "type": "text",
+                        "data": {
+                            "text": feedback_text,
+                            "role": "assistant"
+                        }
+                    })
+
+                    # Send audio response if available
+                    if audio_response and websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_bytes(session_id, audio_response)
+
+                    # Send processing end notification
+                    await websocket_manager.send_json(session_id, {
+                        "type": "control",
+                        "data": {
+                            "action": "stop",
+                            "target": "processing"
+                        }
+                    })
+                    return
+
+                # Process message and get response (regular conversation flow)
+                response_text, audio_response = await voice_assistant_service.process_conversation(
+                    session_id, user_message
+                )
+
+                # Check connection again before sending response
+                if not websocket_manager.is_connected(session_id):
+                    logger.warning(f"Session {session_id} disconnected during text processing")
+                    return
+
+                # Send text response
+                await websocket_manager.send_json(session_id, {
+                    "type": "text",
+                    "data": {
+                        "text": response_text,
+                        "role": "assistant"
+                    }
+                })
+
+                # Send binary audio response if available
+                if audio_response and websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_bytes(session_id, audio_response)
+
+            except Exception as e:
+                logger.error(f"Error processing text for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": "Error processing your message"
+                        }
+                    })
+            finally:
+                # Send processing end notification if still connected
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "control",
+                        "data": {
+                            "action": "stop",
+                            "target": "processing"
+                        }
+                    })
+
+    elif message_type == "presentation_control":
+        # Handle presentation control commands with enhanced error handling
+        action = data.get("data", {}).get("action", "")
+        logger.info(f"Received presentation control action: {action} for session {session_id}")
+
+        if action == "advance_slide":
+            try:
+                # Critical section - this is where connection often fails
+                # First send an acknowledgment to keep the connection alive
+                await websocket_manager.send_json(session_id, {
+                    "type": "processing_status",
+                    "data": {
+                        "status": "processing",
+                        "message": "Advancing slide..."
+                    }
+                })
+
+                # Small delay to ensure frontend received the status
+                await asyncio.sleep(0.1)
+
+                # Run slide advancement in a non-blocking way
+                slide_info = await asyncio.to_thread(voice_assistant_service.advance_slide, session_id)
+
+                if "error" in slide_info:
+                    # Check if we're at the last slide
+                    if "last slide" in slide_info["error"].lower():
+                        # Handle presentation completion
+                        logger.info(f"Reached last slide for session {session_id}, handling completion")
+                        completion_text, audio_response = await voice_assistant_service.handle_presentation_completion(
+                            session_id)
+
+                        # Check connection before continuing
+                        if not websocket_manager.is_connected(session_id):
+                            return
+
+                        # Send completion message
+                        await websocket_manager.send_json(session_id, {
+                            "type": "text",
+                            "data": {
+                                "text": completion_text,
+                                "role": "assistant"
+                            }
+                        })
+
+                        # Send audio response
+                        if audio_response and websocket_manager.is_connected(session_id):
+                            await websocket_manager.send_bytes(session_id, audio_response)
+
+                        # Send presentation update
+                        await websocket_manager.send_json(session_id, {
+                            "type": "presentation_update",
+                            "data": {
+                                "presentation_active": False,
+                                "message": "Presentation completed"
+                            }
+                        })
+                        return
+                    else:
+                        await websocket_manager.send_json(session_id, {
+                            "type": "error",
+                            "data": {
+                                "message": slide_info["error"]
+                            }
+                        })
+                        return
+
+                # Send presentation update notification
+                await websocket_manager.send_json(session_id, {
+                    "type": "presentation_update",
+                    "data": {
+                        "current_slide": slide_info["slide_number"],
+                        "current_presenter": slide_info["presenter"],
+                        "total_slides": slide_info["total_slides"]
+                    }
+                })
+
+                # If it's AI's turn to present, generate and send presentation
+                if slide_info["presenter"] == "ai":
+                    # Send processing start notification
+                    await websocket_manager.send_json(session_id, {
+                        "type": "control",
+                        "data": {
+                            "action": "start",
+                            "target": "processing"
+                        }
+                    })
+
+                    # Process the AI presentation turn with enhanced method
+                    presentation_text, audio_response = await voice_assistant_service.process_presentation_turn(
+                        session_id, slide_info["slide_number"]
+                    )
+
+                    # Check connection before sending response
+                    if not websocket_manager.is_connected(session_id):
+                        logger.warning(f"Session {session_id} disconnected during AI presentation")
+                        return
+
+                    # Send text response
+                    await websocket_manager.send_json(session_id, {
+                        "type": "text",
+                        "data": {
+                            "text": presentation_text,
+                            "role": "assistant"
+                        }
+                    })
+
+                    # Send binary audio response
+                    if audio_response and websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_bytes(session_id, audio_response)
+
+                        # Send playback start notification
+                        await websocket_manager.send_json(session_id, {
+                            "type": "control",
+                            "data": {
+                                "action": "start",
+                                "target": "playback"
+                            }
+                        })
+
+
+
+                    # Send processing end notification
+                    if websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_json(session_id, {
+                            "type": "control",
+                            "data": {
+                                "action": "stop",
+                                "target": "processing"
+                            }
+                        })
+            except Exception as e:
+                logger.error(f"Error handling advance_slide for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": f"Error advancing slide: {str(e)}"
+                        }
+                    })
+
+        elif action == "present_slide":
+            try:
+                # Get state without blocking
+                state = await asyncio.to_thread(voice_assistant_service.get_presentation_state, session_id)
+                current_slide = state["current_slide"]
+
+                # If it's AI's turn to present, generate and send presentation
+                if state["current_presenter"] == "ai":
+                    # Send processing start notification
+                    await websocket_manager.send_json(session_id, {
+                        "type": "control",
+                        "data": {
+                            "action": "start",
+                            "target": "processing"
+                        }
+                    })
+
+                    # Process the AI presentation turn with enhanced method
+                    presentation_text, audio_response = await voice_assistant_service.process_presentation_turn_enhanced(
+                        session_id, current_slide
+                    )
+
+                    # Check connection before continuing
+                    if not websocket_manager.is_connected(session_id):
+                        return
+
+                    # Send text response
+                    await websocket_manager.send_json(session_id, {
+                        "type": "text",
+                        "data": {
+                            "text": presentation_text,
+                            "role": "assistant"
+                        }
+                    })
+
+                    # Send binary audio response
+                    if audio_response and websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_bytes(session_id, audio_response)
+                        # Send playback start notification
+                        await websocket_manager.send_json(session_id, {
+                            "type": "control",
+                            "data": {
+                                "action": "start",
+                                "target": "playback"
+                            }
+                        })
+
+
+                    # Send processing end notification if still connected
+                    if websocket_manager.is_connected(session_id):
+                        await websocket_manager.send_json(session_id, {
+                            "type": "control",
+                            "data": {
+                                "action": "stop",
+                                "target": "processing"
+                            }
+                        })
+                else:
+                    # If it's human's turn, just send a reminder message
+                    await websocket_manager.send_json(session_id, {
+                        "type": "text",
+                        "data": {
+                            "text": f"It's your turn to present slide {current_slide}. I'm ready to listen. When you're done, you can say 'next slide' to continue.",
+                            "role": "assistant"
+                        }
+                    })
+            except Exception as e:
+                logger.error(f"Error handling present_slide for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": f"Error presenting slide: {str(e)}"
+                        }
+                    })
+
+        elif action == "end_presentation":
+            try:
+                # Call the enhanced completion handler
+                completion_text, audio_response = await voice_assistant_service.handle_presentation_completion(
+                    session_id)
+
+                # Send presentation update notification
+                await websocket_manager.send_json(session_id, {
+                    "type": "presentation_update",
+                    "data": {
+                        "presentation_active": False,
+                        "message": "Presentation ended"
+                    }
+                })
+
+                # Send text response
+                await websocket_manager.send_json(session_id, {
+                    "type": "text",
+                    "data": {
+                        "text": completion_text,
+                        "role": "assistant"
+                    }
+                })
+
+                # Send binary audio response
+                if audio_response and websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_bytes(session_id, audio_response)
+            except Exception as e:
+                logger.error(f"Error ending presentation for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": f"Error ending presentation: {str(e)}"
+                        }
+                    })
+
+        elif action == "request_feedback":
+            try:
+                # Generate and send feedback
+                feedback_text, audio_response = await voice_assistant_service.generate_comprehensive_feedback(
+                    session_id)
+
+                # Send text response
+                await websocket_manager.send_json(session_id, {
+                    "type": "text",
+                    "data": {
+                        "text": feedback_text,
+                        "role": "assistant"
+                    }
+                })
+
+                # Send audio response
+                if audio_response and websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_bytes(session_id, audio_response)
+            except Exception as e:
+                logger.error(f"Error generating feedback for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": f"Error generating feedback: {str(e)}"
+                        }
+                    })
+
+        elif action == "get_slide_content":
+            try:
+                # Get the requested slide number
+                slide_number = data.get("data", {}).get("slide_number")
+                if slide_number is None:
+                    # If no slide number provided, get current slide
+                    state = await asyncio.to_thread(voice_assistant_service.get_presentation_state, session_id)
+                    slide_number = state["current_slide"]
+
+                # Get the slide content
+                slide_content = await asyncio.to_thread(
+                    voice_assistant_service.get_slide_content,
+                    session_id,
+                    slide_number
+                )
+
+                # Send slide content
+                await websocket_manager.send_json(session_id, {
+                    "type": "slide_content",
+                    "data": {
+                        "slide_number": slide_number,
+                        "content": slide_content
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Error getting slide content for session {session_id}: {str(e)}")
+                if websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": f"Error getting slide content: {str(e)}"
+                        }
+                    })
 async def handle_binary_message(session_id: str, audio_data: bytes):
     """
     Handle binary messages (audio data) from the client
@@ -718,6 +1190,7 @@ async def handle_binary_message(session_id: str, audio_data: bytes):
 
                 # Send binary audio response
                 if audio_response and websocket_manager.is_connected(session_id):
+                    await websocket_manager.send_bytes(session_id, audio_response)
                     # Send playback start notification
                     await websocket_manager.send_json(session_id, {
                         "type": "control",
@@ -728,7 +1201,270 @@ async def handle_binary_message(session_id: str, audio_data: bytes):
                     })
 
                     # Send audio in chunks to prevent blocking
+        except Exception as e:
+            logger.error(f"Error processing conversation for session {session_id}: {str(e)}")
+            # Try to send error notification if still connected
+            if websocket_manager.is_connected(session_id):
+                try:
+                    await websocket_manager.send_json(session_id, {
+                        "type": "error",
+                        "data": {
+                            "message": "Error processing your message. Please try again."
+                        }
+                    })
+                except:
+                    pass
+
+    except Exception as e:
+        logger.error(f"Error in binary message handler for session {session_id}: {str(e)}")
+    finally:
+        # Always send processing end notification, even if an error occurred
+        if websocket_manager.is_connected(session_id):
+            try:
+                await websocket_manager.send_json(session_id, {
+                    "type": "control",
+                    "data": {
+                        "action": "stop",
+                        "target": "processing"
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Failed to send final processing stop notification: {str(e)}")
+
+
+# Enhanced binary (audio) message handler for web_sockets.py
+
+async def handle_binary_message_enhanced(session_id: str, audio_data: bytes):
+    """
+    Enhanced handler for binary messages (audio data) from the client
+    with improved presentation support
+
+    Args:
+        session_id (str): Session identifier
+        audio_data (bytes): Audio data
+    """
+    if not websocket_manager.is_connected(session_id):
+        logger.warning(f"Attempt to process audio for inactive session: {session_id}")
+        return
+
+    try:
+        # Send processing start notification
+        await websocket_manager.send_json(session_id, {
+            "type": "control",
+            "data": {
+                "action": "start",
+                "target": "processing"
+            }
+        })
+
+        # Process audio and get transcription
+        transcription = await voice_assistant_service.process_audio(audio_data, session_id)
+
+        if not transcription or len(transcription.strip()) == 0:
+            logger.warning(f"Empty transcription received for session {session_id}")
+            # Send processing end notification even for empty transcription
+            if websocket_manager.is_connected(session_id):
+                await websocket_manager.send_json(session_id, {
+                    "type": "control",
+                    "data": {
+                        "action": "stop",
+                        "target": "processing"
+                    }
+                })
+
+                # Send feedback to user about empty transcription
+                await websocket_manager.send_json(session_id, {
+                    "type": "text",
+                    "data": {
+                        "text": "I couldn't detect any speech in the audio. Please try speaking more clearly or check your microphone.",
+                        "role": "assistant"
+                    }
+                })
+            return
+
+        # Check connection before continuing
+        if not websocket_manager.is_connected(session_id):
+            return
+
+        # Send transcription message
+        await websocket_manager.send_json(session_id, {
+            "type": "text",
+            "data": {
+                "text": transcription,
+                "role": "user"
+            }
+        })
+
+        # Check if this is a presentation session
+        is_presentation = False
+        is_human_turn = False
+        try:
+            if hasattr(voice_assistant_service,
+                       'presentation_states') and session_id in voice_assistant_service.presentation_states:
+                state = voice_assistant_service.presentation_states[session_id]
+                is_presentation = getattr(state, 'presentation_active', False)
+                is_human_turn = is_presentation and state.current_presenter == "human"
+
+                logger.info(f"Presentation state: is_presentation={is_presentation}, is_human_turn={is_human_turn}")
+
+                # If it's a presentation and human is presenting, handle special actions
+                if is_presentation:
+                    current_slide = state.current_slide
+
+                    # Check for slide advancement commands
+                    lower_transcription = transcription.lower()
+                    if any(cmd in lower_transcription for cmd in
+                           ["next slide", "advance slide", "continue", "move on", "go ahead"]):
+                        # Acknowledge the command
+                        await websocket_manager.send_json(session_id, {
+                            "type": "text",
+                            "data": {
+                                "text": "Advancing to the next slide...",
+                                "role": "assistant"
+                            }
+                        })
+
+                        # Create a task to handle slide advancement separately
+                        websocket_manager.create_task(
+                            session_id,
+                            handle_text_message(session_id, {
+                                "type": "presentation_control",
+                                "data": {
+                                    "action": "advance_slide"
+                                }
+                            })
+                        )
+
+                        # Send processing end notification
+                        if websocket_manager.is_connected(session_id):
+                            await websocket_manager.send_json(session_id, {
+                                "type": "control",
+                                "data": {
+                                    "action": "stop",
+                                    "target": "processing"
+                                }
+                            })
+                        return
+
+                    # Check for end presentation commands
+                    elif any(cmd in lower_transcription for cmd in
+                             ["end presentation", "finish presentation", "conclude", "wrap up"]):
+                        # Acknowledge the command
+                        await websocket_manager.send_json(session_id, {
+                            "type": "text",
+                            "data": {
+                                "text": "Ending the presentation...",
+                                "role": "assistant"
+                            }
+                        })
+
+                        # Create a task to handle presentation ending
+                        websocket_manager.create_task(
+                            session_id,
+                            handle_text_message(session_id, {
+                                "type": "presentation_control",
+                                "data": {
+                                    "action": "end_presentation"
+                                }
+                            })
+                        )
+
+                        # Send processing end notification
+                        if websocket_manager.is_connected(session_id):
+                            await websocket_manager.send_json(session_id, {
+                                "type": "control",
+                                "data": {
+                                    "action": "stop",
+                                    "target": "processing"
+                                }
+                            })
+                        return
+
+                    # If human is presenting, record the transcription for feedback
+                    if is_human_turn:
+                        # Run in a separate task to avoid blocking
+                        await asyncio.to_thread(
+                            voice_assistant_service.record_presentation_transcription,
+                            session_id, current_slide, transcription
+                        )
+
+                        # Log that we've recorded the transcription
+                        logger.info(
+                            f"Recorded human presentation for slide {current_slide} (length: {len(transcription)})")
+
+                        # Provide minimal acknowledgment if human is presenting
+                        ack_text = "I'm listening to your presentation. Continue when you're ready, or say 'next slide' to advance."
+                        audio_response = await voice_assistant_service.generate_speech(ack_text)
+
+                        # Verify connection is still active before sending
+                        if websocket_manager.is_connected(session_id):
+                            # Send text response
+                            await websocket_manager.send_json(session_id, {
+                                "type": "text",
+                                "data": {
+                                    "text": ack_text,
+                                    "role": "assistant"
+                                }
+                            })
+
+                            # Send audio response
+                            if audio_response and websocket_manager.is_connected(session_id):
+                                await websocket_manager.send_bytes(session_id, audio_response)
+
+                        # Send processing end notification
+                        if websocket_manager.is_connected(session_id):
+                            await websocket_manager.send_json(session_id, {
+                                "type": "control",
+                                "data": {
+                                    "action": "stop",
+                                    "target": "processing"
+                                }
+                            })
+                        return
+        except Exception as e:
+            logger.error(f"Error handling presentation audio: {str(e)}")
+            # Continue with normal conversation processing if there's an error
+
+        # For non-presentation or AI turn, process regular conversation with the transcribed text
+        try:
+            # Send an interim message to prevent timeout
+            await websocket_manager.send_json(session_id, {
+                "type": "processing_status",
+                "data": {
+                    "status": "processing",
+                    "message": "Processing your message..."
+                }
+            })
+
+            # Use a separate thread to avoid blocking the event loop
+            response_text, audio_response = await voice_assistant_service.process_conversation(
+                session_id, transcription
+            )
+
+            # Verify connection is still active before sending
+            if websocket_manager.is_connected(session_id):
+                # Send text response
+                await websocket_manager.send_json(session_id, {
+                    "type": "text",
+                    "data": {
+                        "text": response_text,
+                        "role": "assistant"
+                    }
+                })
+
+                # Send binary audio response
+                if audio_response and websocket_manager.is_connected(session_id):
+                    # Send audio in chunks to prevent blocking
                     await websocket_manager.send_bytes(session_id, audio_response)
+                    # Send playback start notification
+                    await websocket_manager.send_json(session_id, {
+                        "type": "control",
+                        "data": {
+                            "action": "start",
+                            "target": "playback"
+                        }
+                    })
+
         except Exception as e:
             logger.error(f"Error processing conversation for session {session_id}: {str(e)}")
             # Try to send error notification if still connected

@@ -1,15 +1,16 @@
-import os
-import tempfile
 import requests
-import logging
 from langchain.schema import Document
-from pptx import Presentation
-from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
-from urllib.parse import urlparse
 import base64
+import logging
 from typing import Dict, List, Optional, Union, Tuple
 from pydantic import BaseModel
+import tempfile
+import os
+from azure.storage.blob import BlobServiceClient
+from urllib.parse import urlparse
+from pptx import Presentation
+import asyncio
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -457,6 +458,263 @@ def process_powerpoint_file(file_content: bytes) -> PresentationExtract:
                 pass
         raise
 
+async def process_powerpoint_from_url(powerpoint_url: str) -> PresentationExtract:
+    """
+    Process PowerPoint from Azure Blob Storage URL
+
+    Args:
+        powerpoint_url: Azure Blob Storage URL to the PowerPoint file
+
+    Returns:
+        PresentationExtract: Structured content from the presentation
+    """
+    try:
+        # Check if the URL is an Azure Blob Storage URL
+        if 'blob.core.windows.net' in powerpoint_url:
+            # Get the PowerPoint file content from Azure Blob Storage
+            file_content = await download_from_azure_blob(powerpoint_url)
+        else:
+            # If it's a regular HTTP URL, use the standard HTTP download
+            file_content = await download_from_http(powerpoint_url)
+
+        if not file_content:
+            raise ValueError(f"Failed to download PowerPoint from URL: {powerpoint_url}")
+
+        # Process the PowerPoint file
+        return await process_powerpoint_content(file_content)
+    except Exception as e:
+        logger.error(f"Error processing PowerPoint from URL {powerpoint_url}: {str(e)}")
+        raise
+
+
+async def download_from_azure_blob(blob_url: str) -> bytes:
+    """
+    Download file from Azure Blob Storage using the URL
+
+    Args:
+        blob_url: Azure Blob Storage URL
+
+    Returns:
+        bytes: File content
+    """
+    try:
+        # Parse the Azure Blob Storage URL
+        parsed_url = urlparse(blob_url)
+
+        # Extract account name from the host
+        # Format: accountname.blob.core.windows.net
+        account_name = parsed_url.netloc.split('.')[0]
+
+        # Extract container name and blob path from the URL path
+        path_parts = parsed_url.path.strip('/').split('/', 1)
+        if len(path_parts) != 2:
+            raise ValueError(f"Invalid Azure Blob URL format: {blob_url}")
+
+        container_name = path_parts[0]
+        blob_name = path_parts[1]
+
+        logger.info(
+            f"Downloading from Azure Blob Storage: Account={account_name}, Container={container_name}, Blob={blob_name}")
+
+        # Get connection string from environment or use SAS token from URL
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+
+        if connection_string:
+            # Use connection string if available
+            blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+            container_client = blob_service_client.get_container_client(container_name)
+            blob_client = container_client.get_blob_client(blob_name)
+
+            # Download the blob content
+            download_stream = await asyncio.to_thread(blob_client.download_blob)
+            file_content = await asyncio.to_thread(download_stream.readall)
+        else:
+            # If no connection string, assume the URL contains a SAS token
+            # Use anonymous access with the full URL
+            blob_service_client = BlobServiceClient(account_url=f"https://{account_name}.blob.core.windows.net")
+            container_client = blob_service_client.get_container_client(container_name)
+            blob_client = container_client.get_blob_client(blob_name)
+
+            # The URL should contain the SAS token for authentication
+            download_stream = await asyncio.to_thread(
+                lambda: blob_client.download_blob(credential=parsed_url.query)
+            )
+            file_content = await asyncio.to_thread(download_stream.readall)
+
+        logger.info(f"Successfully downloaded PowerPoint from Azure Blob Storage, size: {len(file_content)} bytes")
+        return file_content
+
+    except Exception as e:
+        logger.error(f"Error downloading from Azure Blob Storage: {str(e)}")
+        raise
+
+
+async def process_powerpoint_content(file_content: bytes) -> PresentationExtract:
+    """
+    Process PowerPoint file content and extract slide information
+
+    Args:
+        file_content: Raw bytes of the PowerPoint file
+
+    Returns:
+        PresentationExtract: Structured content from the presentation
+    """
+    try:
+        # Create a temporary file to store the PowerPoint
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(file_content)
+
+        # Process the PowerPoint file
+        try:
+            # Load the presentation
+            presentation = await asyncio.to_thread(Presentation, temp_path)
+
+            slides = []
+            presentation_title = "Untitled Presentation"
+
+            # Try to extract presentation title from properties
+            if hasattr(presentation.core_properties, 'title') and presentation.core_properties.title:
+                presentation_title = presentation.core_properties.title
+
+            # Extract text from each slide
+            for slide_idx, slide in enumerate(presentation.slides):
+                slide_title = ""
+                slide_content = ""
+                slide_notes = ""
+
+                # Extract title from first shape if it appears to be a title
+                if slide.shapes.title:
+                    slide_title = slide.shapes.title.text
+
+                # Extract text from all shapes in the slide
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        # Skip if this is the title we already extracted
+                        if shape.text == slide_title:
+                            continue
+                        slide_content += shape.text + "\n"
+
+                # Extract notes
+                if slide.has_notes_slide:
+                    notes_slide = slide.notes_slide
+                    for note_shape in notes_slide.shapes:
+                        if hasattr(note_shape, "text") and note_shape.text:
+                            slide_notes += note_shape.text + "\n"
+
+                # Create a SlideExtract object
+                slide_extract = SlideExtract(
+                    slide_number=slide_idx + 1,
+                    title=slide_title,
+                    content=slide_content.strip(),
+                    notes=slide_notes.strip() if slide_notes.strip() else None
+                )
+                slides.append(slide_extract)
+
+            # Create the presentation extract
+            presentation_extract = PresentationExtract(
+                title=presentation_title,
+                slides=slides,
+                total_slides=len(slides)
+            )
+
+            return presentation_extract
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+
+    except Exception as e:
+        logger.error(f"Error processing PowerPoint content: {str(e)}")
+        raise
+
+
+def convert_to_setup_format(
+        presentation_extract: PresentationExtract,
+        session_id: str,
+        presenter_ranges: List[Tuple[int, int]],
+        student_persona: Optional[Dict] = None
+) -> Dict:
+    """
+    Convert extracted presentation to setup format with both list and dict formats
+
+    Args:
+        presentation_extract: Extracted presentation content
+        session_id: Session identifier
+        presenter_ranges: List of tuples with ranges (start, end) for human presenter
+        student_persona: Optional customizations for the AI persona
+
+    Returns:
+        Dict: Formatted presentation setup data
+    """
+    # Format slide contents for the API in both list and dict formats
+    slide_contents_list = []
+    slide_contents_dict = {}
+
+    for slide in presentation_extract.slides:
+        content = f"{slide.title}\n\n{slide.content}"
+        if slide.notes:
+            content += f"\n\nNotes: {slide.notes}"
+
+        # Add to list format
+        slide_contents_list.append({
+            "slide_number": slide.slide_number,
+            "content": content
+        })
+
+        # Add to dict format (key is the slide number)
+        slide_contents_dict[slide.slide_number] = content
+
+    # Format presenter ranges
+    presenter_range_objects = []
+    for start, end in presenter_ranges:
+        presenter_range_objects.append({
+            "start": start,
+            "end": end
+        })
+
+    # Create setup data
+    setup_data = {
+        "session_id": session_id,
+        "slide_contents": slide_contents_list,
+        "slide_contents_dict": slide_contents_dict,
+        "presenter_ranges": presenter_range_objects,
+        "presentation_title": presentation_extract.title,
+        "presentation_topic": presentation_extract.title  # Use title as topic if not provided
+    }
+
+    # Add student persona if provided
+    if student_persona:
+        setup_data["student_persona"] = student_persona
+
+    return setup_data
+
+async def download_from_http(url: str) -> bytes:
+    """
+    Download file from a standard HTTP URL
+
+    Args:
+        url: HTTP URL
+
+    Returns:
+        bytes: File content
+    """
+    try:
+        import aiohttp
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise ValueError(f"Failed to download file, status code: {response.status}")
+
+                file_content = await response.read()
+
+        logger.info(f"Successfully downloaded PowerPoint from HTTP URL, size: {len(file_content)} bytes")
+        return file_content
+
+    except Exception as e:
+        logger.error(f"Error downloading from HTTP URL: {str(e)}")
+        raise
 
 async def process_powerpoint_from_upload(file_data: bytes) -> PresentationExtract:
     """
@@ -492,14 +750,14 @@ async def process_powerpoint_from_base64(base64_data: str) -> PresentationExtrac
     return process_powerpoint_file(file_content)
 
 
-def convert_to_presentation_setup(
+def convert_to_presentation_setup_enhanced(
         presentation_extract: PresentationExtract,
         session_id: str,
         presenter_ranges: List[Tuple[int, int]],
         student_persona: Optional[Dict] = None
 ) -> Dict:
     """
-    Convert extracted presentation to setup format
+    Convert extracted presentation to setup format with enhanced validation
 
     Args:
         presentation_extract: Extracted presentation content
@@ -508,19 +766,25 @@ def convert_to_presentation_setup(
         student_persona: Optional customizations for the AI persona
 
     Returns:
-        Dict: Formatted presentation setup data
+        Dict: Formatted presentation setup data with both list and dict formats
     """
     # Format slide contents for the API
-    slide_contents = []
+    slide_contents_list = []
+    slide_contents_dict = {}
+
     for slide in presentation_extract.slides:
         content = f"{slide.title}\n\n{slide.content}"
         if slide.notes:
             content += f"\n\nNotes: {slide.notes}"
 
-        slide_contents.append({
+        # Add to list format
+        slide_contents_list.append({
             "slide_number": slide.slide_number,
             "content": content
         })
+
+        # Add to dict format
+        slide_contents_dict[slide.slide_number] = content
 
     # Format presenter ranges
     presenter_range_objects = []
@@ -533,7 +797,8 @@ def convert_to_presentation_setup(
     # Create setup data
     setup_data = {
         "session_id": session_id,
-        "slide_contents": slide_contents,
+        "slide_contents": slide_contents_list,
+        "slide_contents_dict": slide_contents_dict,  # Also include dict format
         "presenter_ranges": presenter_range_objects,
         "presentation_title": presentation_extract.title,
         "presentation_topic": presentation_extract.title  # Use title as topic if not provided
@@ -544,3 +809,35 @@ def convert_to_presentation_setup(
         setup_data["student_persona"] = student_persona
 
     return setup_data
+
+
+# Add this function to help debug slide content structures
+def validate_slide_content(slide_content) -> bool:
+    """
+    Validate slide content structure to ensure it's in the correct format
+
+    Args:
+        slide_content: Slide content to validate
+
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    try:
+        if isinstance(slide_content, list):
+            # Check list format - each item must have slide_number and content
+            for item in slide_content:
+                if not isinstance(item, dict):
+                    return False
+                if "slide_number" not in item or "content" not in item:
+                    return False
+            return True
+        elif isinstance(slide_content, dict):
+            # Check dict format - keys must be slide numbers
+            for key in slide_content.keys():
+                if not isinstance(key, int):
+                    return False
+            return True
+        else:
+            return False
+    except Exception:
+        return False

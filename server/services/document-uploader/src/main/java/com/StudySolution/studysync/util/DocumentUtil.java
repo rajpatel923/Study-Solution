@@ -92,11 +92,24 @@ public class DocumentUtil {
                 .contentType(document.getContentType())
                 .fileSize(document.getFileSize())
                 .publicUrl(document.getPublicUrl())
+                .previewUrl(null)
                 .pageCount(document.getPageCount())
                 .fileExtension(document.getFileExtension())
                 .metadata(document.getMetadata())
                 .uploadDateTime(document.getUploadDateTime())
                 .lastAccessDateTime(document.getLastAccessDateTime())
                 .build();
+    }
+
+    /**
+     * Converts Document entity to DocumentDTO with a preview URL
+     * @param document The Document entity
+     * @param previewUrl The preview URL to include in the DTO
+     * @return DocumentDTO with preview URL
+     */
+    public DocumentDTO convertToDTOWithPreview(Document document, String previewUrl) {
+        DocumentDTO dto = convertToDTO(document);
+        dto.setPreviewUrl(previewUrl);
+        return dto;
     }
 }

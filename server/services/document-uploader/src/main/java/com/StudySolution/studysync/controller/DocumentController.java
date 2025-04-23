@@ -1,6 +1,7 @@
 package com.StudySolution.studysync.controller;
 
 import com.StudySolution.studysync.DocumentDTO.DocumentDTO;
+import com.StudySolution.studysync.DocumentDTO.DocumentPreviewDTO;
 import com.StudySolution.studysync.DocumentDTO.DocumentResponse;
 import com.StudySolution.studysync.service.DocumentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService  documentService;
+    private static final int DEFAULT_SAS_EXPIRY_MINUTES = 60;
 
     public DocumentController(DocumentService documentService) {
         this.documentService = documentService;
@@ -70,6 +72,7 @@ public class DocumentController {
             description = "Retrieves all active documents belonging to the authenticated user")
     public ResponseEntity<List<DocumentDTO>> getUserDocuments(
             @RequestHeader(value = "X-User-ID", required = true) String userId) {
+        System.out.println(userId);
         List<DocumentDTO> documents = documentService.getDocumentsByUserId(userId);
         return ResponseEntity.ok(documents);
     }
@@ -153,9 +156,52 @@ public class DocumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{id}/preview")
+    @Operation(summary = "Get document preview URL",
+            description = "Generates a temporary SAS URL for document preview")
+    public ResponseEntity<DocumentPreviewDTO> getDocumentPreviewUrl(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "60") int expiryMinutes) {
+
+        return documentService.getDocumentById(id)
+                .flatMap(doc -> documentService.generateSasUrl(id, expiryMinutes)
+                        .map(sasUrl -> DocumentPreviewDTO.builder()
+                                .id(doc.getId())
+                                .fileName(doc.getFileName())
+                                .originalFileName(doc.getOriginalFileName())
+                                .contentType(doc.getContentType())
+                                .previewUrl(sasUrl)
+                                .pageCount(doc.getPageCount())
+                                .fileExtension(doc.getFileExtension())
+                                .message("Preview URL generated successfully")
+                                .build()))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/health")
     @Operation(summary = "Health check", description = "Checks if the service is up and running")
     public ResponseEntity<String> healthCheck() {
         return ResponseEntity.ok("Document Uploader Service is running");
     }
+
+    @GetMapping("/with-preview")
+    @Operation(summary = "Get all documents with preview URLs",
+            description = "Retrieves all active documents with temporary preview URLs")
+    public ResponseEntity<List<DocumentDTO>> getAllDocumentsWithPreview(
+            @RequestParam(defaultValue = "60") int expiryMinutes) {
+        List<DocumentDTO> documents = documentService.getAllDocumentsWithPreview(expiryMinutes);
+        return ResponseEntity.ok(documents);
+    }
+
+    @GetMapping("/user/with-preview")
+    @Operation(summary = "Get all documents for the current user with preview URLs",
+            description = "Retrieves all active documents belonging to the authenticated user with preview URLs")
+    public ResponseEntity<List<DocumentDTO>> getUserDocumentsWithPreview(
+            @RequestHeader(value = "X-User-ID", required = true) String userId,
+            @RequestParam(defaultValue = "60") int expiryMinutes) {
+        List<DocumentDTO> documents = documentService.getDocumentsByUserIdWithPreview(userId, expiryMinutes);
+        return ResponseEntity.ok(documents);
+    }
+
 }

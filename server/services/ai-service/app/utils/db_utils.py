@@ -3,6 +3,8 @@ from pymongo import MongoClient, ASCENDING, TEXT, HASHED
 from pymongo.errors import ConnectionFailure, ConfigurationError
 import logging
 from functools import lru_cache
+from bson import ObjectId
+from datetime import datetime
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -198,3 +200,44 @@ def drop_database(confirm=False):
     except Exception as e:
         logger.error(f"Error dropping database: {str(e)}")
         return False
+
+
+def serialize_mongo_doc(doc):
+    """
+    Serialize a MongoDB document, handling ObjectId and datetime conversions.
+
+    Args:
+        doc: MongoDB document dictionary
+
+    Returns:
+        dict: Document with serialized values (ObjectId → str, datetime → ISO string)
+    """
+    if doc is None:
+        return None
+
+    serialized = {}
+
+    for key, value in doc.items():
+        # Convert ObjectId to string
+        if isinstance(value, ObjectId):
+            serialized[key] = str(value)
+        # Convert datetime to ISO format
+        elif isinstance(value, datetime):
+            serialized[key] = value.isoformat()
+        # Recursively serialize nested dictionaries
+        elif isinstance(value, dict):
+            serialized[key] = serialize_mongo_doc(value)
+        # Serialize items in lists
+        elif isinstance(value, list):
+            serialized[key] = [
+                serialize_mongo_doc(item) if isinstance(item, dict)
+                else str(item) if isinstance(item, ObjectId)
+                else item.isoformat() if isinstance(item, datetime)
+                else item
+                for item in value
+            ]
+        # Keep other values as is
+        else:
+            serialized[key] = value
+
+    return serialized

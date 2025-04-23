@@ -88,4 +88,27 @@ public interface DocumentService {
      * @return Updated DocumentDTO
      */
     Optional<DocumentDTO> updateDocumentPageCount(Long id, Integer pageCount);
+
+    /**
+     * Generate a temporary SAS token URL for document preview
+     * @param id The document ID
+     * @param expiryMinutes How long the URL should be valid (in minutes)
+     * @return Optional containing the SAS URL if document found
+     */
+    Optional<String> generateSasUrl(Long id, int expiryMinutes);
+
+    /**
+     * Get all active documents with preview URLs
+     * @param previewExpiryMinutes How long the preview URLs should be valid (in minutes)
+     * @return List of all active documents with preview URLs
+     */
+    List<DocumentDTO> getAllDocumentsWithPreview(int previewExpiryMinutes);
+
+    /**
+     * Get all documents for a specific user with preview URLs
+     * @param userId The user ID
+     * @param previewExpiryMinutes How long the preview URLs should be valid (in minutes)
+     * @return List of documents belonging to the user with preview URLs
+     */
+    List<DocumentDTO> getDocumentsByUserIdWithPreview(String userId, int previewExpiryMinutes);
 }

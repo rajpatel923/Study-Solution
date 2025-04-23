@@ -8,12 +8,30 @@ from app.services.flashcard_service import (
     update_flashcard,
     update_flashcard_review_status,
     delete_flashcard,
-    get_flashcards_by_set
+    get_flashcards_by_set,
+    get_flashcard_sets_for_user
 )
 from typing import List, Optional
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/flashcards", tags=["flashcards"])
+
+
+@router.get("/user-sets", response_model=dict)
+async def get_user_flashcard_sets(
+        x_user_id: str = Header(..., alias="X-User-ID")
+):
+    """
+    Retrieve all flashcard sets belonging to a specific user.
+
+    User ID is passed as a header and expected to be validated by the API gateway.
+    """
+    result = get_flashcard_sets_for_user(x_user_id)
+
+    if result["status"] == "error":
+        raise HTTPException(status_code=500, detail=result["message"])
+
+    return result
 
 
 @router.post("/", response_model=FlashcardResponse)
@@ -38,6 +56,8 @@ async def create_flashcards(flashcard_data: FlashcardCreate):
         content_type=flashcard_data.content_type
     )
 
+    print(result)
+
     # Check if processing was successful
     if result["status"] == "error":
         raise HTTPException(
@@ -59,12 +79,12 @@ async def create_flashcards(flashcard_data: FlashcardCreate):
 @router.get("/{flashcard_id}", response_model=dict)
 async def read_flashcard(
         flashcard_id: str,
-        x_user_id : str = Header(..., alias="X-User-ID")
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Retrieve a flashcard by its ID.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
     result = get_flashcard_by_id(flashcard_id, x_user_id)
     user_id = x_user_id
@@ -80,6 +100,7 @@ async def read_flashcard(
         )
 
     return result
+
 
 @router.get("/set/{flashcard_set_id}", response_model=dict)
 async def get_flashcard_set(
@@ -98,17 +119,18 @@ async def get_flashcard_set(
 
     return result
 
+
 @router.get("/document/{document_id}", response_model=dict)
 async def get_document_flashcards(
         document_id: str,
-        user_id: str
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Retrieve all flashcards associated with a specific document for a user.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
-    result = get_flashcards_by_document(document_id, user_id)
+    result = get_flashcards_by_document(document_id, x_user_id)
 
     if result["status"] == "error":
         raise HTTPException(status_code=404, detail=result["message"])
@@ -118,7 +140,7 @@ async def get_document_flashcards(
 
 @router.get("/", response_model=dict)
 async def list_flashcards(
-        user_id: str,
+        x_user_id: str = Header(..., alias="X-User-ID"),
         limit: int = 50,
         content_type: Optional[str] = None,
         tag: Optional[str] = None,
@@ -128,7 +150,7 @@ async def list_flashcards(
     Retrieve all flashcards for the specified user.
     Optionally filter by content type, tag, or difficulty.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
     filters = {}
 
@@ -141,7 +163,7 @@ async def list_flashcards(
     if difficulty:
         filters["difficulty"] = difficulty
 
-    result = get_flashcards_for_user(user_id, limit, filters)
+    result = get_flashcards_for_user(x_user_id, limit, filters)
 
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
@@ -149,28 +171,33 @@ async def list_flashcards(
     return result
 
 
+
 @router.patch("/{flashcard_id}", response_model=dict)
 async def update_flashcard_endpoint(
         flashcard_id: str,
-        update_data: FlashcardUpdateRequest
+        update_data: FlashcardUpdateRequest,
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Update an existing flashcard.
 
-    User ID is expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
     try:
         # First verify the flashcard exists and belongs to the user
-        flashcard_result = get_flashcard_by_id(flashcard_id)
+        flashcard_result = get_flashcard_by_id(flashcard_id, x_user_id)
 
         if flashcard_result["status"] == "error":
             raise HTTPException(status_code=404, detail="Flashcard not found")
 
-        if flashcard_result["flashcard"]["user_id"] != update_data.user_id:
+        if flashcard_result["flashcard"]["user_id"] != x_user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to update this flashcard"
             )
+
+        # Set the user_id in the update_data to match the header
+        update_data.user_id = x_user_id
 
         # Update the flashcard
         result = update_flashcard(flashcard_id, update_data)
@@ -189,25 +216,29 @@ async def update_flashcard_endpoint(
 @router.post("/{flashcard_id}/review", response_model=dict)
 async def review_flashcard(
         flashcard_id: str,
-        review_data: FlashcardReviewRequest
+        review_data: FlashcardReviewRequest,
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Update a flashcard's review status after the user has reviewed it.
 
-    User ID is expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
     try:
         # First verify the flashcard exists and belongs to the user
-        flashcard_result = get_flashcard_by_id(flashcard_id)
+        flashcard_result = get_flashcard_by_id(flashcard_id, x_user_id)
 
         if flashcard_result["status"] == "error":
             raise HTTPException(status_code=404, detail="Flashcard not found")
 
-        if flashcard_result["flashcard"]["user_id"] != review_data.user_id:
+        if flashcard_result["flashcard"]["user_id"] != x_user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to review this flashcard"
             )
+
+        # Set the user_id in the review_data to match the header
+        review_data.user_id = x_user_id
 
         # Update the review status
         result = update_flashcard_review_status(flashcard_id, review_data.confidence_level)
@@ -226,21 +257,21 @@ async def review_flashcard(
 @router.delete("/{flashcard_id}", response_model=dict)
 async def delete_flashcard_endpoint(
         flashcard_id: str,
-        user_id: str
+        x_user_id: str = Header(..., alias="X-User-ID")
 ):
     """
     Delete a flashcard by its ID.
 
-    User ID is passed as a query parameter and expected to be validated by the API gateway.
+    User ID is passed as a header and expected to be validated by the API gateway.
     """
     try:
         # First verify the flashcard exists and belongs to the user
-        flashcard_result = get_flashcard_by_id(flashcard_id)
+        flashcard_result = get_flashcard_by_id(flashcard_id, x_user_id)
 
         if flashcard_result["status"] == "error":
             raise HTTPException(status_code=404, detail="Flashcard not found")
 
-        if flashcard_result["flashcard"]["user_id"] != user_id:
+        if flashcard_result["flashcard"]["user_id"] != x_user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to delete this flashcard"
@@ -258,3 +289,4 @@ async def delete_flashcard_endpoint(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting flashcard: {str(e)}")
+

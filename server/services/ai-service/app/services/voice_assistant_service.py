@@ -10,14 +10,10 @@ from elevenlabs import save, stream
 from elevenlabs.client import ElevenLabs
 
 # Import LangGraph components
-from langgraph.graph import StateGraph
-from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
 
 from app.config import get_settings
-from app.utils.powerpoint_utils import process_powerpoint_from_base64
 from app.services.presentation_service import PresentationFeedbackService
 
 # Configure logging
@@ -66,8 +62,8 @@ class EnhancedVoiceAssistantService:
     """Enhanced service with presentation and feedback capabilities"""
 
     def __init__(self,
-                 llm_model: str = "gpt-4-turbo",
-                 feedback_model: str = "gpt-4-turbo"):
+                 llm_model: str = "gpt-4o",
+                 feedback_model: str = "gpt-4o"):
         """Initialize the service with the existing service as a foundation"""
         self.llm_model = llm_model
         self.feedback_service = PresentationFeedbackService(feedback_model)
@@ -161,6 +157,7 @@ class EnhancedVoiceAssistantService:
         # Return the voice ID
         return VOICE_OPTIONS.get(voice_type, VOICE_OPTIONS["default"])
 
+    # Modify the generate_speech function in voice_assistant_service.py
     async def generate_speech(self, text: str, voice_id: str = None, persona: Dict[str, Any] = None) -> bytes:
         """
         Convert text to speech using ElevenLabs API with improved error handling and timeout
@@ -185,14 +182,22 @@ class EnhancedVoiceAssistantService:
                 voice_id = VOICE_OPTIONS["default"]
 
             # Check if ElevenLabs API key is set
-            if not hasattr(settings, 'ELEVENLABS_API_KEY') or not settings.ELEVENLABS_API_KEY:
+            elevenlabs_api_key = settings.ELEVENLABS_API_KEY if hasattr(settings, 'ELEVENLABS_API_KEY') else ""
+
+            if not elevenlabs_api_key:
                 logger.warning("ElevenLabs API key not set. Using placeholder audio response.")
                 # Return a small placeholder MP3 (silent)
-                return b""
+                return b"PLACEHOLDER_AUDIO_DATA"  # This will need to be replaced with actual MP3 data
+
+            # Log the API key status (not the actual key!)
+            logger.info(f"ElevenLabs API key status: {'Set' if elevenlabs_api_key else 'Not set'}")
+            logger.info(f"Generating speech for text of length: {len(text)}")
+            logger.info(f"Using voice ID: {voice_id}")
 
             # Generate audio using the client API with timeout
             try:
-                audio = await asyncio.wait_for(
+                elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+                raw_audio = await asyncio.wait_for(
                     asyncio.to_thread(
                         elevenlabs_client.text_to_speech.convert,
                         text=text,
@@ -200,19 +205,25 @@ class EnhancedVoiceAssistantService:
                         model_id="eleven_turbo_v2",
                         output_format="mp3_44100_128"
                     ),
-                    timeout=15.0  # 15 seconds timeout
+                    timeout=60.0  # 60 seconds timeout
                 )
 
+                if hasattr(raw_audio, '__iter__') and not isinstance(raw_audio, (bytes, bytearray)):
+                    audio = b''.join(raw_audio)
+                else:
+                    audio = raw_audio
+
+                logger.info(f"Successfully generated audio, size: {len(audio)} bytes")
                 return audio
             except asyncio.TimeoutError:
                 logger.error(f"Timeout while generating speech for text: {text[:50]}...")
                 # Create a simple silent audio as fallback
-                return b""
+                return b"PLACEHOLDER_AUDIO_DATA"  # Replace with actual MP3 data
 
         except Exception as e:
-            logger.error(f"Error generating speech: {e}")
+            logger.error(f"Error generating speech: {str(e)}")
             # Return a small placeholder MP3 (silent) in case of failure
-            return b""
+            return b"PLACEHOLDER_AUDIO_DATA"  # Replace with actual MP3 data
 
     async def record_presentation_transcription(
             self,
@@ -628,13 +639,13 @@ class EnhancedVoiceAssistantService:
             "content": pres_state.slide_contents.get(pres_state.current_slide, "No content available")
         }
 
-    async def process_presentation_turn(
+    async def process_presentation_turn_enhanced(
             self,
             session_id: str,
             slide_number: int
     ) -> Tuple[str, bytes]:
         """
-        Process a turn in the presentation with improved error handling
+        Process a turn in the presentation with enhanced error handling and logging
 
         Args:
             session_id: Session identifier
@@ -644,15 +655,23 @@ class EnhancedVoiceAssistantService:
             Tuple[str, bytes]: Assistant's text response and audio response
         """
         if session_id not in self.presentation_states:
+            logger.error(f"No active presentation found for session {session_id}")
             return "No active presentation found.", b""
 
         pres_state = self.presentation_states[session_id]
 
+        # Enhanced logging
+        logger.info(f"Processing presentation turn for session {session_id}, slide {slide_number}")
+        logger.info(f"Total slides: {pres_state.total_slides}, Current presenter: {pres_state.current_presenter}")
+        logger.info(f"Slide contents keys: {list(pres_state.slide_contents.keys())}")
+
         if slide_number not in pres_state.slide_contents:
-            return f"Slide {slide_number} not found.", b""
+            logger.error(f"Slide {slide_number} not found in slide_contents")
+            return f"Slide {slide_number} not found in my content. Please check the slide number.", b""
 
         # Get slide content
         slide_content = pres_state.slide_contents[slide_number]
+        logger.info(f"Retrieved content for slide {slide_number} (length: {len(slide_content)})")
 
         # Determine if it's AI's turn to present
         is_human_slide = False
@@ -665,6 +684,7 @@ class EnhancedVoiceAssistantService:
         if is_human_slide:
             # If it's human's turn, generate a handoff message
             handoff_text = f"Now it's your turn to present slide {slide_number}. I'll listen and provide feedback afterwards."
+            logger.info(f"Human turn for slide {slide_number}, generating handoff")
 
             # Generate audio with the appropriate voice
             try:
@@ -672,6 +692,7 @@ class EnhancedVoiceAssistantService:
                     handoff_text,
                     persona=pres_state.student_persona
                 )
+                logger.info(f"Generated handoff audio (size: {len(audio_response) if audio_response else 0} bytes)")
             except Exception as e:
                 logger.error(f"Error generating handoff speech for session {session_id}: {e}")
                 audio_response = b""
@@ -680,6 +701,7 @@ class EnhancedVoiceAssistantService:
         else:
             # If it's AI's turn, generate presentation content
             pres_state.current_presenter = "ai"
+            logger.info(f"AI turn for slide {slide_number}, generating presentation")
 
             try:
                 # Generate presentation for this slide with a timeout
@@ -691,8 +713,9 @@ class EnhancedVoiceAssistantService:
                             slide_content,
                             pres_state.student_persona
                         ),
-                        timeout=15.0  # 15 seconds timeout
+                        timeout=20.0  # Increased timeout for more reliable generation
                     )
+                    logger.info(f"Generated presentation text (length: {len(presentation_text)})")
                 except asyncio.TimeoutError:
                     logger.error(f"Timeout generating presentation for slide {slide_number} in session {session_id}")
                     presentation_text = f"I'll now present slide {slide_number}. " + \
@@ -704,12 +727,18 @@ class EnhancedVoiceAssistantService:
                     presentation_text,
                     persona=pres_state.student_persona
                 )
+                logger.info(
+                    f"Generated presentation audio (size: {len(audio_response) if audio_response else 0} bytes)")
 
                 return presentation_text, audio_response
             except Exception as e:
                 logger.error(f"Error during AI turn for session {session_id}, slide {slide_number}: {e}")
                 fallback_text = f"I'm having trouble presenting slide {slide_number}. Let's move on to the next slide."
                 return fallback_text, b""
+
+    async def process_presentation_turn(self, session_id: str, slide_number: int):
+        # simply delegate to the “enhanced” version
+        return await self.process_presentation_turn_enhanced(session_id, slide_number)
 
     async def process_conversation(self, session_id: str, user_message: str) -> Tuple[str, bytes]:
         """
@@ -865,6 +894,132 @@ class EnhancedVoiceAssistantService:
         audio_response = await self.generate_speech(response_text, voice_id)
 
         return response_text, audio_response
+
+    async def generate_comprehensive_feedback(
+            self,
+            session_id: str,
+            full_analysis: bool = False
+    ) -> Tuple[str, bytes]:
+        """
+        Generate comprehensive feedback on the user's presentation
+
+        Args:
+            session_id: Session identifier
+            full_analysis: Whether to perform a detailed analysis
+
+        Returns:
+            Tuple[str, bytes]: Text feedback and audio response
+        """
+        if session_id not in self.presentation_states:
+            return "No presentation data found for feedback.", b""
+
+        if session_id not in self.presentation_transcriptions:
+            return "No presentation recordings found for feedback.", b""
+
+        pres_state = self.presentation_states[session_id]
+
+        # Get the slides the human presented
+        human_slides = []
+        for start, end in pres_state.presenter_ranges:
+            for slide_num in range(start, end + 1):
+                if slide_num in self.presentation_transcriptions[session_id]:
+                    human_slides.append(slide_num)
+
+        if not human_slides:
+            return "I don't have any recording of your presentation to provide feedback on.", b""
+
+        # Get slide contents and transcriptions
+        slide_contents = {}
+        transcriptions = {}
+        for slide_num in human_slides:
+            if slide_num in pres_state.slide_contents:
+                slide_contents[slide_num] = pres_state.slide_contents[slide_num]
+            if slide_num in self.presentation_transcriptions[session_id]:
+                transcriptions[slide_num] = self.presentation_transcriptions[session_id][slide_num]
+
+        # Use more sophisticated feedback generation
+        system_prompt = """You are an experienced presentation coach giving feedback to a student.
+        Analyze the content and delivery of their presentation compared to the slide content.
+        Be constructive, specific, and encouraging. 
+        Focus on both strengths and areas for improvement.
+
+        Structure your feedback in these sections:
+        1. Overall Impression (2-3 sentences)
+        2. Content Coverage (how well the presenter covered the slide content)
+        3. Delivery Style (pacing, clarity, engagement)
+        4. Specific Strengths (2-3 points)
+        5. Areas for Growth (2-3 actionable suggestions)
+        6. Final Encouragement (1-2 sentences)
+        """
+
+        human_prompt = f"""I need to provide feedback on a presentation. 
+
+        PRESENTATION SLIDES CONTENT:
+        {json.dumps(slide_contents, indent=2)}
+
+        PRESENTER'S ACTUAL TRANSCRIPTIONS:
+        {json.dumps(transcriptions, indent=2)}
+
+        Please provide structured feedback as outlined in the system instructions.
+        """
+
+        # Use OpenAI API for feedback generation
+        try:
+            # Call OpenAI with improved reliability
+            llm = ChatOpenAI(model=self.llm_model, temperature=0.5)
+
+            response = await llm.ainvoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=human_prompt)
+            ])
+
+            feedback_text = response.content
+
+            # Generate audio for the feedback
+            audio_response = await self.generate_speech(
+                feedback_text,
+                persona={"age": 35, "gender": "female", "tone": "professional"}  # Use a coaching persona
+            )
+
+            return feedback_text, audio_response
+        except Exception as e:
+            logger.error(f"Error generating presentation feedback: {e}")
+            return "I encountered an error while generating your presentation feedback. Please try again later.", b""
+
+    async def handle_presentation_completion(
+            self,
+            session_id: str
+    ) -> Tuple[str, bytes]:
+        """
+        Handle the completion of a presentation and generate summary feedback
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Tuple[str, bytes]: Completion message and audio response
+        """
+        # End the presentation
+        self.end_presentation(session_id)
+
+        # Generate a completion message
+        completion_text = "You've completed your presentation. Would you like me to provide feedback on your presentation?"
+
+        # Get the feedback right away if we have transcriptions
+        if session_id in self.presentation_transcriptions and self.presentation_transcriptions[session_id]:
+            feedback_text, feedback_audio = await self.generate_comprehensive_feedback(session_id)
+
+            # Combine completion and feedback
+            full_text = f"{completion_text}\n\n{feedback_text}"
+
+            # Generate audio for the combined message
+            audio_response = await self.generate_speech(full_text)
+
+            return full_text, audio_response
+        else:
+            # Just send the completion message if no transcriptions
+            audio_response = await self.generate_speech(completion_text)
+            return completion_text, audio_response
 
 
 voice_assistant_service = EnhancedVoiceAssistantService()

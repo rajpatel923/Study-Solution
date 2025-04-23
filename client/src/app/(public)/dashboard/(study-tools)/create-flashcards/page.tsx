@@ -54,21 +54,26 @@ function FlashcardContent() {
   const handleUrlUpload = async (url: string) => {
     try {
       // Call actual document service
-      const response = await documentService.uploadFromUrl(url);
+      //const response = await documentService.uploadFromUrl(url);
       
-      if (response.success) {
+      // if (response.success) {
+      //   setUploadedDocument({
+      //     id: response.id || 0,
+      //     fileName: response.fileName || "URL Document",
+      //     publicUrl: response.publicUrl || url,
+      //     message: "Document uploaded successfully", 
+      //     success: true
+      //   });
         setUploadedDocument({
-          id: response.id || 0,
-          fileName: response.fileName || "URL Document",
-          publicUrl: response.publicUrl || url,
-          message: "Document uploaded successfully", 
-          success: true
-        });
+          id: 0,
+          fileName: "URL Document",
+          publicUrl: url,
+          success: true,
+          message: "Document uploaded successfully"
+        })
         setWorkflowState(FlashcardWorkflowState.FORM);
         toast.success("URL processed successfully");
-      } else {
-        throw new Error(response.message || "Processing URL failed");
-      }
+      
     } catch (error: any) {
       console.error("Error processing URL:", error);
       toast.error(error.message || "Failed to process URL");

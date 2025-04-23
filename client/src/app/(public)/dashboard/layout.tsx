@@ -24,7 +24,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   
-
+  
+  if(user){
+    localStorage.setItem('userId', String(user.id));
+  }
   // useEffect(() => {
   //   // Redirect to login if not authenticated and not loading
   //   if (!isLoading && !isAuthenticated) {

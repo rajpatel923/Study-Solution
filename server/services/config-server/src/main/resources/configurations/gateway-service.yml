@@ -24,6 +24,12 @@ spring:
           uri: lb://ai-service  # Lower case to match Python registration
           filters:
               - StripPrefix=1
+        - id: group-service
+          predicates:
+            - Path=/groupservice/**
+          uri: lb://group-service
+          filters:
+            - StripPrefix=1
 
 
 

@@ -52,7 +52,7 @@ const SavedFlashcardsPage = () => {
         setError(null);
         
         // Use the user_id parameter for authentication 
-        const userId = "user123"; // Replace with your auth system's user ID
+        const userId = "5"; // Replace with your auth system's user ID
         const response = await flashcardService.getFlashcardsBySet(flashcardSetId, userId);
         
         if (response.status === "success" && response.flashcards && response.flashcards.length > 0) {

@@ -148,7 +148,7 @@ export default function UploadForm({
     if (acceptedFileExtensions) return acceptedFileExtensions;
     
     switch (activeTab) {
-      case 'pdf': return ".pdf";
+      case 'pdf': return ".pdf, pptx, ppt";
       case 'ppt': return ".ppt,.pptx";
       case 'video': return ".mp4,.webm";
       case 'excel': return ".xls,.xlsx,.csv";

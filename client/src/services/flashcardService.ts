@@ -11,6 +11,7 @@ export interface FlashcardCreate {
   difficulty_level?: string;
   focus_areas?: string[];
   card_count?: number;
+  content_type?: string;
 }
 
 export interface SampleFlashcard {
@@ -29,7 +30,8 @@ export interface FlashcardResponse {
 }
 
 export interface Flashcard {
-  id: string;
+  id?: string;
+  _id?: string; // Adding support for MongoDB style IDs
   user_id: string;
   document_id: string;
   flashcard_set_id: string;
@@ -50,6 +52,7 @@ export interface FlashcardSetResponse {
   status: string;
   message?: string;
   flashcards?: Flashcard[];
+  count?: number;
   flashcard_set?: {
     id: string;
     user_id: string;
@@ -162,10 +165,18 @@ const flashcardService = {
     userId: string
   ): Promise<any> => {
     try {
-      const response: AxiosResponse<any> = await api.patch(`/${flashcardId}`, {
-        ...updateData,
-        user_id: userId,
-      });
+      const response: AxiosResponse<any> = await api.patch(
+        `/${flashcardId}`,
+        {
+          ...updateData,
+          user_id: userId,
+        },
+        {
+          headers: {
+            "X-User-ID": userId,
+          },
+        }
+      );
       toast.success("Flashcard updated successfully");
       return response.data;
     } catch (error: any) {
@@ -177,7 +188,7 @@ const flashcardService = {
     }
   },
 
-  // Update flashcard review status
+  // Review flashcard
   reviewFlashcard: async (
     flashcardId: string,
     confidenceLevel: number,
@@ -189,6 +200,11 @@ const flashcardService = {
         {
           confidence_level: confidenceLevel,
           user_id: userId,
+        },
+        {
+          headers: {
+            "X-User-ID": userId,
+          },
         }
       );
       return response.data;
@@ -207,9 +223,11 @@ const flashcardService = {
     userId: string
   ): Promise<any> => {
     try {
-      const response: AxiosResponse<any> = await api.delete(
-        `/${flashcardId}?user_id=${userId}`
-      );
+      const response: AxiosResponse<any> = await api.delete(`/${flashcardId}`, {
+        headers: {
+          "X-User-ID": userId,
+        },
+      });
       toast.success("Flashcard deleted successfully");
       return response.data;
     } catch (error: any) {
@@ -217,6 +235,61 @@ const flashcardService = {
         error.response?.data?.detail || "Error deleting flashcard";
       toast.error(errorMessage);
       console.error(`Error deleting flashcard with ID ${flashcardId}:`, error);
+      throw error;
+    }
+  },
+
+  // Get all flashcards for a user with pagination and filters
+  getAllFlashcards: async (
+    userId: string,
+    limit: number = 10,
+    contentType?: string,
+    tag?: string,
+    difficulty?: string
+  ): Promise<{ status: string; flashcards?: Flashcard[]; count?: number }> => {
+    try {
+      // Construct query parameters
+      const params: any = { limit };
+
+      if (contentType) params.content_type = contentType;
+      if (tag) params.tag = tag;
+      if (difficulty) params.difficulty = difficulty;
+
+      const response: AxiosResponse<any> = await api.get("/", {
+        params,
+        headers: {
+          "X-User-ID": userId,
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail || "Error fetching flashcards";
+      toast.error(errorMessage);
+      console.error("Error fetching flashcards:", error);
+      throw error;
+    }
+  },
+
+  // Get all flashcard sets for a user
+  getAllFlashcardSets: async (
+    userId: string
+  ): Promise<{ status: string; flashcard_sets?: any[]; count?: number }> => {
+    try {
+      // Using the user-sets endpoint
+      const response: AxiosResponse<any> = await api.get("/user-sets", {
+        headers: {
+          "X-User-ID": userId,
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail || "Error fetching flashcard sets";
+      toast.error(errorMessage);
+      console.error("Error fetching flashcard sets:", error);
       throw error;
     }
   },
