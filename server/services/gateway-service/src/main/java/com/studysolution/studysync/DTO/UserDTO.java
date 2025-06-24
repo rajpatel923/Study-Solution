@@ -1,16 +1,14 @@
-package com.studysolution.studysync.models;
+package com.studysolution.studysync.DTO;
 
+import com.studysolution.studysync.models.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import net.minidev.json.annotate.JsonIgnore;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
+import reactor.core.publisher.Mono;
 
-import java.lang.annotation.Annotation;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,14 +16,12 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("users")
-public class User{
-    @Id
+public class UserDTO {
+
     private Long id;
 
     private String username;
-    @JsonIgnore
-    private String password;
+
     private String email;
     private List<String> roles;
     private boolean enabled;
@@ -37,13 +33,14 @@ public class User{
     @Column("o_auth_provider_id")
     private String oAuthProviderId;    // user ID in the provider's system
 
-    @Column("refresh_token")
-    @JsonIgnore
-    private String refreshToken;
+    public UserDTO(User byUsername) {
+        id = byUsername.getId();
+        username = byUsername.getUsername();
+        email = byUsername.getEmail();
+        roles = byUsername.getRoles();
+        oAuthProvider = byUsername.getOAuthProvider();
+        oAuthProviderId = byUsername.getOAuthProviderId();
+        enabled = byUsername.isEnabled();
 
-    @Column("refresh_token_expiry_date")
-    @JsonIgnore
-    private LocalDateTime refreshTokenExpiryDate;
-
-
+    }
 }

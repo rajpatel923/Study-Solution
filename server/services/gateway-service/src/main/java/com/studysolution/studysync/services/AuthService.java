@@ -1,5 +1,6 @@
 package com.studysolution.studysync.services;
 
+import com.studysolution.studysync.DTO.UserDTO;
 import com.studysolution.studysync.models.LoginRequest;
 import com.studysolution.studysync.models.RegisterRequest;
 import com.studysolution.studysync.models.TokenResponse;
@@ -203,7 +204,7 @@ public class AuthService {
                 .then();
     }
 
-    public Mono<User> getUserFromToken(String accessToken) {
+    public Mono<UserDTO> getUserFromToken(String accessToken) {
         if (accessToken == null || accessToken.isEmpty()) {
             return Mono.error(new RuntimeException("Token is missing"));
         }
@@ -229,11 +230,13 @@ public class AuthService {
                 // Try to find by username as fallback
                 String username = claims.getSubject();
                 return userRepository.findByUsername(username)
+                        .map(user -> new UserDTO(user))
                         .switchIfEmpty(Mono.error(new RuntimeException("User not found")));
             }
 
             // Find the user by ID
             return userRepository.findById(userId)
+                    .map(user -> new UserDTO(user))
                     .switchIfEmpty(Mono.error(new RuntimeException("User not found")));
 
         } catch (ExpiredJwtException e) {

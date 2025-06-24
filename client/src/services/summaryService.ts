@@ -14,7 +14,7 @@ export interface SummaryCreate {
 
 export interface SummaryResponse {
   status: "success" | "error" | "processing";
-  summary_id?: string;
+  summary_id: string;
   document_id?: string;
   summary?: string;
   word_count?: number;
@@ -29,24 +29,23 @@ export interface SummaryUpdate {
   user_id: string;
 }
 
-// Use environment variable with fallback
-const API_BASE_URL = "http://localhost:8098/api/v1";
 
 // Create an axios instance with default configs
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/summaries`,
+  baseURL: `${process.env.NEXT_PUBLIC_BACKEND_URL}/aiservice/api/v1/summaries`,
   headers: {
     "Content-Type": "application/json",
   },
   withCredentials: true,
-  timeout: 1500000, // 15 seconds timeout
+  timeout: 1500000,
 });
 
 // API service for summary operations
 const summaryService = {
   // Create a new summary
   createSummary: async (
-    summaryData: SummaryCreate
+    summaryData: SummaryCreate,
+    username : string | undefined,
   ): Promise<SummaryResponse> => {
     try {
       const response: AxiosResponse<SummaryResponse> = await api.post(
@@ -54,7 +53,7 @@ const summaryService = {
         summaryData,
         {
           headers: {
-            "X-User-ID": "user123",
+            "X-User-ID": username? username : "",
           },
         }
       );
@@ -97,16 +96,11 @@ const summaryService = {
   // Legacy method for backwards compatibility
   getSummaryById: async (
     summaryId: string,
-    userId: string
+    userId: string | undefined
   ): Promise<SummaryResponse> => {
     try {
       const response: AxiosResponse<SummaryResponse> = await api.get(
-        `/${summaryId}?X-User-ID=${userId}`,
-        {
-          headers: {
-            "X-User-ID": userId,
-          },
-        }
+        `/${summaryId}`
       );
       return response.data;
     } catch (error: any) {
@@ -150,27 +144,17 @@ const summaryService = {
     updateData: SummaryUpdate
   ): Promise<SummaryResponse> => {
     try {
-      // Get the user ID - in a real app, this would come from authentication
-      const userId = "user123"; // Replace with actual user ID when available
 
       // Ensure user_id is included
       const finalUpdateData = {
         ...updateData,
-        user_id: updateData.user_id || userId,
+        user_id: updateData.user_id,
       };
-
-      // For auto-save, we don't want toast notifications on every save
-      // Only show toasts for manual saves or errors
       const showToast = !updateData.summary_content;
 
       const response: AxiosResponse<SummaryResponse> = await api.patch(
         `/${summaryId}`,
-        finalUpdateData,
-        {
-          headers: {
-            "X-User-ID": "user123",
-          },
-        }
+        finalUpdateData
       );
 
       if (showToast) {

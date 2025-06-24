@@ -10,7 +10,6 @@ import { useAuth } from "@/context/AuthContext";
 
 import Input from "@/components/ui/customeInput";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import SocialAuthButtons from "@/components/common/auth/socialAuthButton";
 
 // Login schema
@@ -24,7 +23,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 // Signup schema
 const signupSchema = z.object({
   birthday: z.string().nonempty("Please pick your date of birth."),
-  accountType: z.string().nonempty("Please choose an account type."),
+  // accountType: z.string().nonempty("Please choose an account type."),
   name: z.string().nonempty("Name is required."),
   username: z.string().min(3, "Username must be at least 3 characters."),
   email: z.string().email("Invalid email address."),
@@ -91,7 +90,6 @@ export default function AuthPage() {
 
   const onSignupSubmit: SubmitHandler<SignupFormData> = async (data) => {
     setAuthError(null);
-    
     try {
       const success = await authRegister({
         username: data.username,
@@ -99,7 +97,6 @@ export default function AuthPage() {
         password: data.password,
         name: data.name,
         birthday: data.birthday,
-        accountType: data.accountType
       });
       
       if (success) {
@@ -232,20 +229,6 @@ export default function AuthPage() {
               type="date"
               registration={registerSignup("birthday")}
               error={signupErrors.birthday?.message}
-              disabled={isLoading}
-            />
-
-            {/* Account Type */}
-            <Select
-              label="Account Type"
-              registration={registerSignup("accountType")}
-              error={signupErrors.accountType?.message}
-              options={[
-                { value: "", label: "Select an option" },
-                { value: "student", label: "Student" },
-                { value: "teacher", label: "Teacher" },
-                { value: "other", label: "Other" },
-              ]}
               disabled={isLoading}
             />
 

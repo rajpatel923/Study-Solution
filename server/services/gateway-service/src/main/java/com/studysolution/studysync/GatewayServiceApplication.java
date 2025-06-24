@@ -15,6 +15,7 @@ public class GatewayServiceApplication {
 		System.setProperty("JWT_SECRET", dotenv.get("JWT_SECRET"));
 		System.setProperty("JWT_ACCESS_TOKEN_EXPIRATION", dotenv.get("JWT_ACCESS_TOKEN_EXPIRATION"));
 		System.setProperty("JWT_REFERESH_TOKEN_EXPIRATION", dotenv.get("JWT_REFERESH_TOKEN_EXPIRATION"));
+		System.setProperty("FRONTEND_URL", dotenv.get("FRONTEND_URL"));
 		SpringApplication.run(GatewayServiceApplication.class, args);
 	}
 

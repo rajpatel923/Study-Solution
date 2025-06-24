@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple, ByteString, Union
+import base64
 
 import openai
 from elevenlabs import save, stream
@@ -24,7 +25,8 @@ settings = get_settings()
 openai_client = openai.Client(api_key=settings.OPENAI_API_KEY)
 
 # Initialize ElevenLabs client
-elevenlabs_client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY if hasattr(settings, 'ELEVENLABS_API_KEY') else "")
+elevenlabs_api_key = settings.ELEVENLABS_API_KEY if hasattr(settings, 'ELEVENLABS_API_KEY') else ""
+elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
 # Define voice options for different personas
 VOICE_OPTIONS = {
@@ -34,6 +36,9 @@ VOICE_OPTIONS = {
     "mature_female": "21m00Tcm4TlvDq8ikWAM",  # Example mature female voice
     "default": "21m00Tcm4TlvDq8ikWAM"  # Default voice ID
 }
+
+# Silent MP3 file in base64 (1 second of silence)
+SILENT_MP3 = b'\xFF\xFB\x90\x44\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 
 class PresentationState:
@@ -56,6 +61,8 @@ class PresentationState:
             "tone": "enthusiastic but informative",
             "speaking_style": "conversational with occasional academic terminology"
         }
+        self.presented_slides = set()  # Track which slides have been presented
+        self.human_presented_slides = set()  # Track slides presented by the human
 
 
 class EnhancedVoiceAssistantService:
@@ -127,10 +134,231 @@ class EnhancedVoiceAssistantService:
                         transcription.text
                     ))
 
+                    # Mark this slide as presented by human
+                    self.presentation_states[session_id].human_presented_slides.add(current_slide)
+
             return transcription.text
         except Exception as e:
             logger.error(f"Error transcribing audio in session {session_id}: {e}")
             return "I'm sorry, I couldn't understand the audio. Could you please try again?"
+
+    async def debug_process_presentation_turn_enhanced(
+            self,
+            session_id: str,
+            slide_number: int
+    ) -> Tuple[str, bytes]:
+        """
+        Process a turn in the presentation with enhanced error handling, logging and debugging
+
+        Args:
+            session_id: Session identifier
+            slide_number: Current slide number
+
+        Returns:
+            Tuple[str, bytes]: Assistant's text response and audio response
+        """
+        if session_id not in self.presentation_states:
+            logger.error(f"No active presentation found for session {session_id}")
+            return "No active presentation found.", SILENT_MP3
+
+        pres_state = self.presentation_states[session_id]
+
+        # Enhanced logging
+        logger.info(f"DEBUG: Processing presentation turn for session {session_id}, slide {slide_number}")
+        logger.info(
+            f"DEBUG: Total slides: {pres_state.total_slides}, Current presenter: {pres_state.current_presenter}")
+        logger.info(f"DEBUG: Slide contents keys: {list(pres_state.slide_contents.keys())}")
+        logger.info(f"DEBUG: Student persona: {pres_state.student_persona}")
+
+        if slide_number not in pres_state.slide_contents:
+            logger.error(f"DEBUG: Slide {slide_number} not found in slide_contents")
+            return f"Slide {slide_number} not found in my content. Please check the slide number.", SILENT_MP3
+
+        # Get slide content
+        slide_content = pres_state.slide_contents[slide_number]
+        logger.info(f"DEBUG: Retrieved content for slide {slide_number} (length: {len(slide_content)})")
+
+        # Determine if it's AI's turn to present
+        is_human_slide = False
+        for start, end in pres_state.presenter_ranges:
+            if start <= slide_number <= end:
+                is_human_slide = True
+                pres_state.current_presenter = "human"
+                break
+
+        if is_human_slide:
+            # If it's human's turn, generate a handoff message
+            handoff_text = f"Now it's your turn to present slide {slide_number}. I'll listen and provide feedback afterwards."
+            logger.info(f"DEBUG: Human turn for slide {slide_number}, generating handoff")
+
+            # Generate audio with the appropriate voice
+            try:
+                logger.info(f"DEBUG: Generating audio for handoff message with persona: {pres_state.student_persona}")
+                audio_response = await self.generate_speech(
+                    handoff_text,
+                    persona=pres_state.student_persona
+                )
+                logger.info(
+                    f"DEBUG: Generated handoff audio (size: {len(audio_response) if audio_response else 0} bytes)")
+            except Exception as e:
+                logger.error(f"DEBUG: Error generating handoff speech for session {session_id}: {e}")
+                audio_response = SILENT_MP3
+
+            # Mark this slide as human's
+            pres_state.current_presenter = "human"
+
+            return handoff_text, audio_response
+        else:
+            # If it's AI's turn, generate presentation content
+            pres_state.current_presenter = "ai"
+            logger.info(f"DEBUG: AI turn for slide {slide_number}, generating presentation")
+
+            try:
+                # Log OpenAI API credentials status (do not log the actual keys!)
+                logger.info(f"DEBUG: OpenAI API key status: {'Set' if settings.OPENAI_API_KEY else 'Not set'}")
+                logger.info(f"DEBUG: LLM model being used: {self.llm_model}")
+
+                # Log information about slide content
+                logger.info(f"DEBUG: Slide content sample: {slide_content[:100]}...")
+
+                # Generate presentation for this slide with a timeout and detailed error logging
+                try:
+                    logger.info(f"DEBUG: Calling generate_slide_presentation for slide {slide_number}")
+                    presentation_text = await asyncio.wait_for(
+                        self.generate_slide_presentation(
+                            session_id,
+                            slide_number,
+                            slide_content,
+                            pres_state.student_persona
+                        ),
+                        timeout=30.0  # 30 second timeout for generation
+                    )
+                    logger.info(f"DEBUG: Generated presentation text (length: {len(presentation_text)})")
+                    logger.info(f"DEBUG: Presentation text sample: {presentation_text[:100]}...")
+                except asyncio.TimeoutError:
+                    logger.error(
+                        f"DEBUG: Timeout generating presentation for slide {slide_number} in session {session_id}")
+                    presentation_text = f"I'll now present slide {slide_number}. " + \
+                                        "This slide covers key points related to our topic. " + \
+                                        "Let me highlight the main ideas here."
+                except Exception as e:
+                    logger.error(f"DEBUG: Exception during generate_slide_presentation: {str(e)}")
+                    import traceback
+                    logger.error(f"DEBUG: Traceback: {traceback.format_exc()}")
+                    presentation_text = f"I'll now present slide {slide_number}. " + \
+                                        "This slide contains important information for our topic."
+
+                # Mark this slide as presented
+                pres_state.presented_slides.add(slide_number)
+
+                # Generate audio with the appropriate voice
+                logger.info(f"DEBUG: Generating audio for presentation with persona: {pres_state.student_persona}")
+                audio_response = await self.generate_speech(
+                    presentation_text,
+                    persona=pres_state.student_persona
+                )
+                logger.info(
+                    f"DEBUG: Generated presentation audio (size: {len(audio_response) if audio_response else 0} bytes)")
+
+                return presentation_text, audio_response
+            except Exception as e:
+                logger.error(f"DEBUG: Error during AI turn for session {session_id}, slide {slide_number}: {e}")
+                import traceback
+                logger.error(f"DEBUG: Error traceback: {traceback.format_exc()}")
+                fallback_text = f"I'm having trouble presenting slide {slide_number}. Let's move on to the next slide."
+                return fallback_text, SILENT_MP3
+
+    async def debug_generate_slide_presentation(
+            self,
+            session_id: str,
+            slide_number: int,
+            slide_content: str,
+            student_persona: Dict[str, Any]
+    ) -> str:
+        """
+        Enhanced debugging version of generate_slide_presentation with more error handling
+
+        Args:
+            session_id: Session identifier
+            slide_number: Slide being presented
+            slide_content: Content of the slide
+            student_persona: Persona to use for the presentation
+
+        Returns:
+            str: Generated presentation text
+        """
+        # Use ChatOpenAI directly for this simpler task
+        logger.info(f"DEBUG: Starting debug_generate_slide_presentation for slide {slide_number}")
+
+        try:
+            # Configure OpenAI client with detailed error logging
+            logger.info(f"DEBUG: Initializing ChatOpenAI with model={self.llm_model}, temperature=0.7")
+            llm = ChatOpenAI(model=self.llm_model, temperature=0.7)
+
+            # Log ChatOpenAI configuration
+            logger.info(f"DEBUG: ChatOpenAI configuration: {llm}")
+
+            # Prepare system prompt based on persona
+            logger.info(f"DEBUG: Creating system prompt with persona: {student_persona}")
+            system_prompt = f"""You are a {student_persona.get('age', '20')}-year-old {student_persona.get('year', 'college')} student 
+            named {student_persona.get('name', 'Alex')} majoring in {student_persona.get('major', 'Computer Science')}.
+            You are giving a presentation and presenting slide {slide_number}.
+            Speak in a {student_persona.get('tone', 'enthusiastic but informative')} tone with a 
+            {student_persona.get('speaking_style', 'conversational with occasional academic terminology')} style.
+            Keep your presentation of this slide concise and engaging, between 30 seconds to 1 minute in length.
+            Don't say "In this slide..." or use similar meta-references.
+            Just present the content naturally as if speaking to your class."""
+
+            human_prompt = f"""Here is the content of slide {slide_number}:
+
+            {slide_content}
+
+            Please present this slide content in your own words as part of the larger presentation.
+            """
+
+            # Log the prompts
+            logger.info(f"DEBUG: System prompt: {system_prompt}")
+            logger.info(f"DEBUG: Human prompt: {human_prompt}")
+
+            # Generate presentation text with detailed error handling
+            try:
+                logger.info(f"DEBUG: Calling LLM to generate presentation text")
+                response = await llm.ainvoke([
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=human_prompt)
+                ])
+
+                logger.info(f"DEBUG: LLM response: {response}")
+                logger.info(f"DEBUG: Response type: {type(response)}")
+
+                presentation_text = response.content
+                logger.info(f"DEBUG: Extracted content from response: {presentation_text[:100]}...")
+
+                # Mark this slide as presented
+                if session_id in self.presentation_states:
+                    self.presentation_states[session_id].presented_slides.add(slide_number)
+
+                return presentation_text
+            except Exception as e:
+                logger.error(f"DEBUG: Error during LLM invocation: {str(e)}")
+                import traceback
+                logger.error(f"DEBUG: Traceback: {traceback.format_exc()}")
+
+                # Log detailed OpenAI configuration
+                try:
+                    logger.error(f"DEBUG: OpenAI API key status: {'Set' if settings.OPENAI_API_KEY else 'Not set'}")
+                    logger.error(f"DEBUG: OpenAI API base: {openai_client.base_url}")
+                except Exception as config_error:
+                    logger.error(f"DEBUG: Error accessing OpenAI configuration: {config_error}")
+
+                # Provide a simple fallback
+                return f"Let me present slide {slide_number}. This slide covers important information related to our topic."
+        except Exception as e:
+            logger.error(f"DEBUG: Error in debug_generate_slide_presentation: {e}")
+            import traceback
+            logger.error(f"DEBUG: Traceback: {traceback.format_exc()}")
+            # Provide a simple fallback
+            return f"Let me present slide {slide_number}. This slide contains key information for our presentation."
 
     async def select_voice_for_persona(self, persona: Dict[str, Any]) -> str:
         """
@@ -157,7 +385,6 @@ class EnhancedVoiceAssistantService:
         # Return the voice ID
         return VOICE_OPTIONS.get(voice_type, VOICE_OPTIONS["default"])
 
-    # Modify the generate_speech function in voice_assistant_service.py
     async def generate_speech(self, text: str, voice_id: str = None, persona: Dict[str, Any] = None) -> bytes:
         """
         Convert text to speech using ElevenLabs API with improved error handling and timeout
@@ -177,17 +404,11 @@ class EnhancedVoiceAssistantService:
             elif not voice_id:
                 voice_id = VOICE_OPTIONS["default"]
 
-            # Fallback to default if voice_id is not set
-            if not voice_id:
-                voice_id = VOICE_OPTIONS["default"]
-
             # Check if ElevenLabs API key is set
-            elevenlabs_api_key = settings.ELEVENLABS_API_KEY if hasattr(settings, 'ELEVENLABS_API_KEY') else ""
-
             if not elevenlabs_api_key:
                 logger.warning("ElevenLabs API key not set. Using placeholder audio response.")
                 # Return a small placeholder MP3 (silent)
-                return b"PLACEHOLDER_AUDIO_DATA"  # This will need to be replaced with actual MP3 data
+                return SILENT_MP3
 
             # Log the API key status (not the actual key!)
             logger.info(f"ElevenLabs API key status: {'Set' if elevenlabs_api_key else 'Not set'}")
@@ -196,7 +417,6 @@ class EnhancedVoiceAssistantService:
 
             # Generate audio using the client API with timeout
             try:
-                elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
                 raw_audio = await asyncio.wait_for(
                     asyncio.to_thread(
                         elevenlabs_client.text_to_speech.convert,
@@ -217,13 +437,13 @@ class EnhancedVoiceAssistantService:
                 return audio
             except asyncio.TimeoutError:
                 logger.error(f"Timeout while generating speech for text: {text[:50]}...")
-                # Create a simple silent audio as fallback
-                return b"PLACEHOLDER_AUDIO_DATA"  # Replace with actual MP3 data
+                # Return silent audio as fallback
+                return SILENT_MP3
 
         except Exception as e:
             logger.error(f"Error generating speech: {str(e)}")
-            # Return a small placeholder MP3 (silent) in case of failure
-            return b"PLACEHOLDER_AUDIO_DATA"  # Replace with actual MP3 data
+            # Return silent audio in case of failure
+            return SILENT_MP3
 
     async def record_presentation_transcription(
             self,
@@ -248,6 +468,14 @@ class EnhancedVoiceAssistantService:
         else:
             self.presentation_transcriptions[session_id][slide_number] = transcription
 
+        # Add to presented slides
+        if session_id in self.presentation_states:
+            self.presentation_states[session_id].presented_slides.add(slide_number)
+
+            # If current presenter is human, add to human presented slides
+            if self.presentation_states[session_id].current_presenter == "human":
+                self.presentation_states[session_id].human_presented_slides.add(slide_number)
+
         logger.info(f"Recorded transcription for slide {slide_number} in session {session_id}")
 
     async def generate_slide_presentation(
@@ -270,32 +498,49 @@ class EnhancedVoiceAssistantService:
             str: Generated presentation text
         """
         # Use ChatOpenAI directly for this simpler task
-        llm = ChatOpenAI(model=self.llm_model, temperature=0.7)
 
-        # Prepare system prompt based on persona
-        system_prompt = f"""You are a {student_persona.get('age', '20')}-year-old {student_persona.get('year', 'college')} student 
-        named {student_persona.get('name', 'Alex')} majoring in {student_persona.get('major', 'Computer Science')}.
-        You are giving a presentation and presenting slide {slide_number}.
-        Speak in a {student_persona.get('tone', 'enthusiastic but informative')} tone with a 
-        {student_persona.get('speaking_style', 'conversational with occasional academic terminology')} style.
-        Keep your presentation of this slide concise and engaging, between 30 seconds to 1 minute in length.
-        Don't say "In this slide..." or use similar meta-references.
-        Just present the content naturally as if speaking to your class."""
 
-        human_prompt = f"""Here is the content of slide {slide_number}:
+        # llm = ChatOpenAI(model=self.llm_model, temperature=0.7)
+        #
+        # # Prepare system prompt based on persona
+        # system_prompt = f"""You are a {student_persona.get('age', '20')}-year-old {student_persona.get('year', 'college')} student
+        # named {student_persona.get('name', 'Alex')} majoring in {student_persona.get('major', 'Computer Science')}.
+        # You are giving a presentation and presenting slide {slide_number}.
+        # Speak in a {student_persona.get('tone', 'enthusiastic but informative')} tone with a
+        # {student_persona.get('speaking_style', 'conversational with occasional academic terminology')} style.
+        # Keep your presentation of this slide concise and engaging, between 30 seconds to 1 minute in length.
+        # Don't say "In this slide..." or use similar meta-references.
+        # Just present the content naturally as if speaking to your class."""
+        #
+        # human_prompt = f"""Here is the content of slide {slide_number}:
+        #
+        # {slide_content}
+        #
+        # Please present this slide content in your own words as part of the larger presentation.
+        # """
+        #
+        # try:
+        #     # Generate presentation text
+        #     response = await llm.ainvoke([
+        #         SystemMessage(content=system_prompt),
+        #         HumanMessage(content=human_prompt)
+        #     ])
+        #
+        #     # Mark this slide as presented
+        #     if session_id in self.presentation_states:
+        #         self.presentation_states[session_id].presented_slides.add(slide_number)
+        #
+        #     return response.content
+        # except Exception as e:
+        #     logger.error(f"Error generating slide presentation: {e}")
+        #     # Provide a simple fallback
+        #     return f"Let me present slide {slide_number}. This slide covers important information related to our topic."
 
-        {slide_content}
 
-        Please present this slide content in your own words as part of the larger presentation.
-        """
-
-        # Generate presentation text
-        response = await llm.ainvoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt)
-        ])
-
-        return response.content
+        logger.info(f"Called generate_slide_presentation for session {session_id}, slide {slide_number}")
+        return await self.debug_generate_slide_presentation(
+            session_id, slide_number, slide_content, student_persona
+        )
 
     async def generate_presentation_feedback(
             self,
@@ -389,8 +634,6 @@ class EnhancedVoiceAssistantService:
             "slides_analyzed": slide_numbers
         }
 
-    # Update this method in your voice_assistant_service.py file
-
     def setup_presentation(
             self,
             session_id: str,
@@ -465,6 +708,9 @@ class EnhancedVoiceAssistantService:
             self.session_data[session_id]["messages"].append({"role": "system", "content": system_message})
             logger.info(f"Added system message for session {session_id}")
 
+            # Reset presentation tracking data
+            self.presentation_transcriptions[session_id] = {}
+
             # Verify that the presentation state was stored correctly
             if session_id in self.presentation_states:
                 logger.info(f"Successfully set up presentation for session {session_id}")
@@ -516,7 +762,9 @@ class EnhancedVoiceAssistantService:
             "presentation_active": pres_state.presentation_active,
             "presentation_title": pres_state.presentation_title,
             "presentation_topic": pres_state.presentation_topic,
-            "student_persona": pres_state.student_persona
+            "student_persona": pres_state.student_persona,
+            "presented_slides": list(pres_state.presented_slides),
+            "human_presented_slides": list(pres_state.human_presented_slides)
         }
 
     def advance_slide(self, session_id: str) -> Dict[str, Any]:
@@ -656,7 +904,7 @@ class EnhancedVoiceAssistantService:
         """
         if session_id not in self.presentation_states:
             logger.error(f"No active presentation found for session {session_id}")
-            return "No active presentation found.", b""
+            return "No active presentation found.", SILENT_MP3
 
         pres_state = self.presentation_states[session_id]
 
@@ -667,7 +915,7 @@ class EnhancedVoiceAssistantService:
 
         if slide_number not in pres_state.slide_contents:
             logger.error(f"Slide {slide_number} not found in slide_contents")
-            return f"Slide {slide_number} not found in my content. Please check the slide number.", b""
+            return f"Slide {slide_number} not found in my content. Please check the slide number.", SILENT_MP3
 
         # Get slide content
         slide_content = pres_state.slide_contents[slide_number]
@@ -695,7 +943,10 @@ class EnhancedVoiceAssistantService:
                 logger.info(f"Generated handoff audio (size: {len(audio_response) if audio_response else 0} bytes)")
             except Exception as e:
                 logger.error(f"Error generating handoff speech for session {session_id}: {e}")
-                audio_response = b""
+                audio_response = SILENT_MP3
+
+            # Mark this slide as human's
+            pres_state.current_presenter = "human"
 
             return handoff_text, audio_response
         else:
@@ -722,6 +973,9 @@ class EnhancedVoiceAssistantService:
                                         "This slide covers key points related to our topic. " + \
                                         "Let me highlight the main ideas here."
 
+                # Mark this slide as presented
+                pres_state.presented_slides.add(slide_number)
+
                 # Generate audio with the appropriate voice
                 audio_response = await self.generate_speech(
                     presentation_text,
@@ -734,11 +988,22 @@ class EnhancedVoiceAssistantService:
             except Exception as e:
                 logger.error(f"Error during AI turn for session {session_id}, slide {slide_number}: {e}")
                 fallback_text = f"I'm having trouble presenting slide {slide_number}. Let's move on to the next slide."
-                return fallback_text, b""
+                return fallback_text, SILENT_MP3
 
-    async def process_presentation_turn(self, session_id: str, slide_number: int):
-        # simply delegate to the “enhanced” version
-        return await self.process_presentation_turn_enhanced(session_id, slide_number)
+    async def process_presentation_turn(self, session_id: str, slide_number: int) -> Tuple[str, bytes]:
+        """
+        Process a turn in the presentation with better debugging
+
+        Args:
+            session_id: Session identifier
+            slide_number: Current slide number
+
+        Returns:
+            Tuple[str, bytes]: Assistant's text response and audio response
+        """
+        # Use the enhanced debug version
+        logger.info(f"Called process_presentation_turn for session {session_id}, slide {slide_number}")
+        return await self.debug_process_presentation_turn_enhanced(session_id, slide_number)
 
     async def process_conversation(self, session_id: str, user_message: str) -> Tuple[str, bytes]:
         """
@@ -766,7 +1031,10 @@ class EnhancedVoiceAssistantService:
                 slide_info = self.advance_slide(session_id)
 
                 if "error" in slide_info:
-                    return slide_info["error"], b""
+                    # Check if we've reached the end of the presentation
+                    if "last slide" in slide_info["error"].lower():
+                        return await self.handle_presentation_completion(session_id)
+                    return slide_info["error"], SILENT_MP3
 
                 # Process the presentation turn for the new slide
                 return await self.process_presentation_turn(
@@ -788,17 +1056,16 @@ class EnhancedVoiceAssistantService:
                 return conclusion_text, audio_response
 
             # Handle "give feedback" command
-            elif "feedback" in lower_message and "presentation" in lower_message:
+            elif "feedback" in lower_message and ("presentation" in lower_message or "how did i do" in lower_message):
                 # Get the slides the human presented
                 human_slides = []
                 pres_state = self.presentation_states[session_id]
 
-                for start, end in pres_state.presenter_ranges:
-                    for slide_num in range(start, end + 1):
-                        human_slides.append(slide_num)
+                # Use the human_presented_slides set instead of inferring from ranges
+                human_slides = list(pres_state.human_presented_slides)
 
                 if not human_slides:
-                    return "I don't have any slides to provide feedback on. You didn't present any slides in this session.", b""
+                    return "I don't have any slides to provide feedback on. You didn't present any slides in this session.", SILENT_MP3
 
                 # Get slide contents
                 slide_contents = {}
@@ -911,22 +1178,18 @@ class EnhancedVoiceAssistantService:
             Tuple[str, bytes]: Text feedback and audio response
         """
         if session_id not in self.presentation_states:
-            return "No presentation data found for feedback.", b""
+            return "No presentation data found for feedback.", SILENT_MP3
 
         if session_id not in self.presentation_transcriptions:
-            return "No presentation recordings found for feedback.", b""
+            return "No presentation recordings found for feedback.", SILENT_MP3
 
         pres_state = self.presentation_states[session_id]
 
         # Get the slides the human presented
-        human_slides = []
-        for start, end in pres_state.presenter_ranges:
-            for slide_num in range(start, end + 1):
-                if slide_num in self.presentation_transcriptions[session_id]:
-                    human_slides.append(slide_num)
+        human_slides = list(pres_state.human_presented_slides)
 
         if not human_slides:
-            return "I don't have any recording of your presentation to provide feedback on.", b""
+            return "I don't have any recording of your presentation to provide feedback on.", SILENT_MP3
 
         # Get slide contents and transcriptions
         slide_contents = {}
@@ -984,7 +1247,7 @@ class EnhancedVoiceAssistantService:
             return feedback_text, audio_response
         except Exception as e:
             logger.error(f"Error generating presentation feedback: {e}")
-            return "I encountered an error while generating your presentation feedback. Please try again later.", b""
+            return "I encountered an error while generating your presentation feedback. Please try again later.", SILENT_MP3
 
     async def handle_presentation_completion(
             self,
@@ -1022,4 +1285,5 @@ class EnhancedVoiceAssistantService:
             return completion_text, audio_response
 
 
+# Initialize the voice assistant service
 voice_assistant_service = EnhancedVoiceAssistantService()

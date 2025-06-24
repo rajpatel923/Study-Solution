@@ -8,7 +8,7 @@ import asyncio
 from app.utils.powerpoint_utils import process_powerpoint_from_url, SlideExtract, PresentationExtract
 from app.services.voice_assistant_service import voice_assistant_service
 from app.config import get_settings
-from app.utils.websocket_manager import websocket_manager
+from app.utils.websocket_manager import enhanced_websocket_manager as websocket_manager
 
 # Initialize router
 router = APIRouter(
@@ -101,20 +101,44 @@ async def process_presentation_in_background(session_id: str, presentation_url: 
                 }
             })
 
+
     except Exception as e:
+
         logger.error(f"Error in background presentation processing for {session_id}: {str(e)}")
-        session_storage[session_id] = {
-            "processing": False,
-            "error": str(e)
-        }
+
+        if session_id in session_storage:
+
+            session_storage[session_id] = {
+
+                "processing": False,
+
+                "error": str(e)
+
+            }
+
+        else:
+
+            session_storage[session_id] = {
+
+                "processing": False,
+
+                "error": str(e)
+
+            }
 
         # Notify client of error (if websocket connected)
+
         if websocket_manager.is_connected(session_id):
             await websocket_manager.send_json(session_id, {
+
                 "type": "error",
+
                 "data": {
+
                     "message": f"Error processing presentation: {str(e)}"
+
                 }
+
             })
 
 
@@ -389,6 +413,7 @@ async def setup_presentation(
     except Exception as e:
         logger.error(f"Error starting presentation setup: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error setting up presentation: {str(e)}")
+
 
 
 

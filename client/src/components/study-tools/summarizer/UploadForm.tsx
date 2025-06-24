@@ -119,8 +119,7 @@ export default function UploadForm({
     e.preventDefault();
     
     if (!url || !onUrlUpload) return;
-    
-    // Basic URL validation
+
     try {
       new URL(url);
       onUrlUpload(url);
@@ -130,7 +129,7 @@ export default function UploadForm({
   };
   
   const getTabTitle = () => {
-    // Use custom dropzoneText if provided
+
     if (dropzoneText) return dropzoneText;
     
     switch (activeTab) {
@@ -142,8 +141,7 @@ export default function UploadForm({
       default: return 'Document';
     }
   };
-  
-  // Determine accept attribute for input
+
   const getAcceptString = () => {
     if (acceptedFileExtensions) return acceptedFileExtensions;
     
@@ -158,7 +156,6 @@ export default function UploadForm({
   
   return (
     <div ref={formRef} className="w-full">
-      {/* URL Input for all tabs */}
       <form onSubmit={handleUrlSubmit} className="animate-item mb-6">
         <div className="relative w-full">
           <div className="flex bg-background">
@@ -188,15 +185,13 @@ export default function UploadForm({
           </div>
         </div>
       </form>
-      
-      {/* Divider */}
+
       <div className="animate-item flex items-center my-6">
         <div className="flex-grow border-t border-border"></div>
         <span className="mx-4 text-muted-foreground">or</span>
         <div className="flex-grow border-t border-border"></div>
       </div>
-      
-      {/* File Upload Area */}
+
       <div 
         ref={dropAreaRef}
         onClick={isLoading ? undefined : handleClick}
@@ -233,8 +228,7 @@ export default function UploadForm({
             </>
           )}
         </div>
-        
-        {/* Kai Mascot */}
+
         <div className="absolute right-4 bottom-0">
           <KaiMascot />
         </div>
@@ -252,10 +246,9 @@ export default function UploadForm({
           Or, upload from Google Drive
         </Button>
       </div>
-      
-      {/* Terms of Service */}
+
       <div className="animate-item mt-8 text-xs text-muted-foreground text-center px-4">
-        By uploading your file to Knowt, you acknowledge that you agree to Knowt's 
+        By uploading your file to StudySync, you acknowledge that you agree to StudySync's
         <Button variant="link" className="px-1 h-auto text-xs text-primary">Terms of Service & Community Guidelines</Button>. 
         Please be sure not to violate others' copyright or privacy rights.
       </div>

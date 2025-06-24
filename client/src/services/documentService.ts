@@ -47,27 +47,27 @@ const extractTitleFromUrl = (url: string): string => {
   }
 };
 
-// Create an axios instance with default configs
+
 const api = axios.create({
-  baseURL: "http://localhost:8091/documentservice/api/v1/documents",
+  baseURL: `${process.env.NEXT_PUBLIC_BACKEND_URL}/documentservice/api/v1/documents`,
   headers: {
     "Content-Type": "application/json",
   },
   withCredentials: true,
 });
 
-// API service for document operations
+
 const documentService = {
-  // Upload a document
-  uploadDocument: async (file: File): Promise<DocumentResponse> => {
+
+  uploadDocument: async (file: File, userName:string | undefined ): Promise<DocumentResponse> => {
     const formData = new FormData();
     formData.append("file", file);
-
+    formData.append("userName", userName? userName : "");
     try {
       const response: AxiosResponse<DocumentResponse> = await api.post(
         "/upload",
-        formData,
-        {
+            formData,
+          {
           headers: {
             "Content-Type": "multipart/form-data",
           },
@@ -296,7 +296,6 @@ const documentService = {
     try {
       const requestData: UrlUploadRequest = {
         url,
-        userId: "user123", // Replace with actual user ID from auth context
         title: extractTitleFromUrl(url),
       };
 

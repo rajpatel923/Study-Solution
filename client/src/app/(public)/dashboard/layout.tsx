@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { Button } from '@/components/ui/button';
+import AnimatedBackground from "@/components/study-tools/summarizer/AnimatedBackground";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -28,26 +29,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   if(user){
     localStorage.setItem('userId', String(user.id));
   }
-  // useEffect(() => {
-  //   // Redirect to login if not authenticated and not loading
-  //   if (!isLoading && !isAuthenticated) {
-  //     router.push('/auth');
-  //   }
-  // }, [isAuthenticated, isLoading, router]);
-
-  // // Show loading state while checking authentication
-  // if (isLoading) {
-  //   return (
-  //     <div className="flex h-screen items-center justify-center">
-  //       <Loader/>
-  //     </div>
-  //   );
-  // }
-
-  // // Don't render the dashboard if not authenticated
-  // if (!isAuthenticated) {
-  //   return null;
-  // }
+  useEffect(() => {
+    // Redirect to login if not authenticated and not loading
+    if (!isLoading && !isAuthenticated) {
+      router.push('/auth');
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   return (
     <SidebarProvider className='h-screen w-screen overflow-hidden'>
@@ -83,6 +70,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               </Button>
             </div>
           </header>
+        <AnimatedBackground />
         {children}
       </main>
       </div>

@@ -8,9 +8,10 @@ import SummaryPreferencesForm, { SummaryPreferences } from "./SummaryPreferenceF
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import documentService, { DocumentDTO } from "@/services/documentService";
+import documentService from "@/services/documentService";
 import summaryService, { SummaryCreate } from "@/services/summaryService";
 import { useRouter } from "next/navigation";
+import {useAuth} from "@/context/AuthContext";
 
 enum WorkflowState {
   UPLOAD,
@@ -27,11 +28,11 @@ interface UploadedFile {
   size: number;
   type: string;
   url: string;
-  pages: number;
 }
 
 export default function UploadWorkflow() {
   const { addFile } = useAppContext();
+  const { user } = useAuth()
   const [workflowState, setWorkflowState] = useState<WorkflowState>(WorkflowState.UPLOAD);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -42,7 +43,7 @@ export default function UploadWorkflow() {
   const contentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Initial animation when component mounts
+
   useEffect(() => {
     if (containerRef.current) {
       gsap.from(containerRef.current, {
@@ -54,27 +55,24 @@ export default function UploadWorkflow() {
     }
   }, []);
 
-  // Content transition animation on state change
   useEffect(() => {
     if (contentRef.current) {
-      // First set to initial state (opacity 1) to avoid any persistence of previous animations
+
       gsap.set(contentRef.current, { opacity: 1, y: 0 });
-      
-      // Then animate with a fresh tween
+
       gsap.from(contentRef.current, {
         opacity: 0,
         y: 10,
         duration: 0.4,
         ease: "power2.out",
-        clearProps: "all" // This ensures no inline styles are left after animation
+        clearProps: "all"
       });
     }
   }, [workflowState]);
 
-  // Start processing progress animation
+
   useEffect(() => {
     if (workflowState === WorkflowState.PROCESSING) {
-      // Setup a timer to simulate progress
       let progress = 0;
       const interval = setInterval(() => {
         progress += 1;
@@ -94,7 +92,7 @@ export default function UploadWorkflow() {
     setWorkflowState(WorkflowState.UPLOADING);
     
     try {
-      // Set up a timer to simulate gradual progress
+
       let progress = 0;
       const progressInterval = setInterval(() => {
         progress += 5;
@@ -103,10 +101,9 @@ export default function UploadWorkflow() {
         }
       }, 100);
       
-      // Actual upload to server
-      const response = await documentService.uploadDocument(file);
-      
-      // Clear the interval once we have the response
+
+      const response = await documentService.uploadDocument(file, user?.username);
+
       clearInterval(progressInterval);
       setUploadProgress(100);
       
@@ -117,12 +114,11 @@ export default function UploadWorkflow() {
           size: file.size,
           type: file.type,
           url: response.publicUrl || "",
-          pages: response.pageCount || 0
         });
         
         setTimeout(() => {
           setWorkflowState(WorkflowState.PREFERENCES);
-        }, 500); // Short delay for visual feedback
+        }, 500);
       } else {
         throw new Error(response.message || "Upload failed");
       }
@@ -133,38 +129,16 @@ export default function UploadWorkflow() {
     }
   };
 
-  // Function to handle URL upload
+
   const handleUrlUpload = async (url: string) => {
-    //setWorkflowState(WorkflowState.UPLOADING);
     
     try {
-      // For URL uploads, you would normally send the URL to your backend
-      // This is a simplified version - you'll need to implement this in your backend
-      // const response = await documentService.uploadFromUrl(url);
-      
-      // if (response && response.success) {
-      //   setUploadedFile({
-      //     id: response.id || 0,
-      //     name: response.fileName || "URL Document",
-      //     size: 0,
-      //     type: "application/pdf", // Assuming PDF
-      //     url: response.publicUrl || "",
-      //     pages: response.pageCount || 0
-      //   });
-        
-      //   setTimeout(() => {
-      //     setWorkflowState(WorkflowState.PREFERENCES);
-      //   }, 500);
-      // } else {
-      //   throw new Error(response.message || "URL upload failed");
-      // }
       setUploadedFile({
         id: 0,
         name: "URL Document",
         size: 0,
         type: "application/url",
         url: url,
-        pages:0
       })
       setTimeout(() => {
         setWorkflowState(WorkflowState.PREFERENCES)
@@ -176,19 +150,18 @@ export default function UploadWorkflow() {
     }
   };
 
-  // Function to poll for summary status
+  //trying mech
   const pollSummaryStatus = async (summaryId: string) => {
     try {
-      // Keep polling until we get a success or error
+
       let attempts = 0;
-      const maxAttempts = 30; // Stop after 30 attempts (roughly 1.5 minutes)
+      const maxAttempts = 30;
       
       const checkStatus = async () => {
         try {
-          // Get the summary status
-          const summary = await summaryService.getSummaryById(summaryId, "user123");
-          
-          // If successful, move to complete state
+
+          const summary = await summaryService.getSummaryById(summaryId, user?.username);
+
           if (summary.status === 'success') {
             setProcessingProgress(100);
             setTimeout(() => {
@@ -274,8 +247,7 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
           uploadedAt: new Date()
         });
       } else if (isUrlSubmission) {
-        // For URL submissions, we don't need to update document metadata or page count
-        // Just add basic information to the app context if needed
+
         addFile({
           id: `url-${Date.now()}`, // Generate a temporary ID
           name: preferences.title || uploadedFile.name,
@@ -289,7 +261,7 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
       // Now create the summary request to the AI service
       if (preferences.outputType !== "none") {
         // Get the userId from your authentication context
-        const userId = "current-user-id"; // TODO: Replace with actual user ID from auth context
+        const userId = user?.username; // TODO: Replace with actual user ID from auth context
         
         // Create the summary request based on the output type
         const summaryRequest: SummaryCreate = {
@@ -323,13 +295,10 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
         }
         
         try {
-          // Send the request to the AI service
-          const summaryResponse = await summaryService.createSummary(summaryRequest);
-          
-          // Handle the response based on its status
+          const summaryResponse = await summaryService.createSummary(summaryRequest, userId);
+
           if (summaryResponse.status === 'success') {
-            // Summary is immediately available
-            console.log("Summary created successfully:", summaryResponse.summary_id);
+
             setSummaryId(summaryResponse.summary_id);
             setProcessingProgress(100);
             setTimeout(() => {
@@ -337,7 +306,6 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
               toast.success("Summary created successfully!");
             }, 500);
           } else if (summaryResponse.status === 'processing') {
-            // Summary is being processed, start polling for updates
             setSummaryId(summaryResponse.summary_id || "");
             if (summaryResponse.summary_id) {
               pollSummaryStatus(summaryResponse.summary_id);
@@ -345,29 +313,24 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
               throw new Error("No summary ID received from server");
             }
           } else {
-            // Error occurred
             throw new Error(summaryResponse.error_message || "Summary generation failed");
           }
         } catch (error: any) {
-          console.error("Error creating summary:", error);
           setErrorMessage(error.message || "Summary generation failed");
           setWorkflowState(WorkflowState.ERROR);
         }
       } else {
-        // No summary requested, go to complete state
         setWorkflowState(WorkflowState.COMPLETE);
       }
     } else {
       throw new Error("No file upload information found");
     }
   } catch (error: any) {
-    console.error("Error processing document:", error);
     setErrorMessage(error.message || "Unknown error during processing");
     setWorkflowState(WorkflowState.ERROR);
   }
 };
 
-  // Reset the workflow
   const resetWorkflow = () => {
     setWorkflowState(WorkflowState.UPLOAD);
     setUploadProgress(0);
@@ -381,12 +344,10 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
     if (summaryId) {
       router.push(`/dashboard/save-summaries/${summaryId}`);
     } else {
-      // If no summary was created, navigate to the document viewer
       router.push(`/documents/${uploadedFile?.id}`);
     }
   };
 
-  // Show different content based on workflow state
   const renderContent = () => {
     switch (workflowState) {
       case WorkflowState.UPLOAD:

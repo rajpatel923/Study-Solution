@@ -1,5 +1,6 @@
 package com.studysolution.studysync.controller;
 
+import com.studysolution.studysync.DTO.UserDTO;
 import com.studysolution.studysync.models.LoginRequest;
 import com.studysolution.studysync.models.RegisterRequest;
 import com.studysolution.studysync.models.TokenResponse;
@@ -90,6 +91,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public Mono<ResponseEntity<Void>> logout(ServerWebExchange exchange) {
+
         // Clear cookies first
         ResponseCookie clearAccessToken = CookieUtil.createClearCookie("accessToken");
         ResponseCookie clearRefreshToken = CookieUtil.createClearCookie("refreshToken");
@@ -109,7 +111,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public Mono<ResponseEntity<User>> getCurrentUser(ServerWebExchange exchange) {
+    public Mono<ResponseEntity<UserDTO>> getCurrentUser(ServerWebExchange exchange) {
         // Get access token from cookie or header
         String accessToken = CookieUtil.extractAccessToken(exchange.getRequest());
 

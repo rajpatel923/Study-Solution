@@ -66,13 +66,13 @@ export default function SummaryOptions() {
 
   const toggleFavorite = () => {
     setIsFavorite(!isFavorite);
-    
+    //todo save information about the favorite and map to which tabid it is and save it to the dbs
     // Star animation
     const star = document.querySelector('.favorite-icon');
     if (star) {
       gsap.fromTo(star, 
         { scale: 0.5, rotate: -15 }, 
-        { scale: 1.2, rotate: 15, duration: 0.3, yoyo: true, repeat: 1, ease: "back.out" }
+        { scale: 1.2, rotate: 15, duration: 0.3, ease: "back.out" }
       );
     }
   };
@@ -84,7 +84,7 @@ export default function SummaryOptions() {
 
   return (
     <div className="w-full flex flex-col">
-      {/* Tab Buttons */}
+
       <div ref={tabsRef} className="flex items-center justify-center gap-2 md:gap-4 mb-6 flex-wrap">
         {TABS.map((tab) => (
           <Button
@@ -103,10 +103,8 @@ export default function SummaryOptions() {
         ))}
       </div>
 
-      {/* Card Section */}
       <Card ref={cardRef} className="border shadow-md">
         <CardContent className="p-6">
-          {/* Title Bar with Favorite Button */}
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-foreground">{getCardTitle()}</h2>
             <Button 
@@ -119,18 +117,16 @@ export default function SummaryOptions() {
               <span className="sr-only">{isFavorite ? "Remove from favorites" : "Add to favorites"}</span>
             </Button>
           </div>
-          
-          {/* Description */}
+
           <div className="mb-6">
             <p className="text-foreground/80">
-              Upload any {activeTab.toUpperCase()} & Kai will make notes & flashcards instantly.
+              Upload any {activeTab.toUpperCase()} & StudySync will make notes & flashcards instantly.
             </p>
             <p className="text-muted-foreground text-sm">
-              In &lt; 30 seconds Kai will read your document and tell you all the important stuff in it.
+              In &lt; 90 seconds StudySync will read your document and tell you all the important stuff in it.
             </p>
           </div>
 
-          {/* Upload Workflow Integration */}
           <UploadWorkflow />
         </CardContent>
       </Card>

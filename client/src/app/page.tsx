@@ -11,7 +11,7 @@ import AllFeatures from "@/components/common/allFeatures";
 
 export default function Home() {
   return (
-    <div className="">
+    <div>
         <NavBar/>
         <HeroSection/>
         <ComparingSection/>

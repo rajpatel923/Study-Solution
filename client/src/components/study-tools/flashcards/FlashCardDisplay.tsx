@@ -39,9 +39,7 @@ export default function FlashcardDisplay() {
   useEffect(() => {
     const fetchFlashcards = async () => {
       if (!flashcardSetId) {
-        // If no flashcard set ID, use the sample flashcards
         if (sampleFlashcards.length > 0) {
-          // Convert sample flashcards to full flashcard format
           const sampleAsFullFlashcards = sampleFlashcards.map((sample, index) => ({
             id: `sample-${index}`,
             user_id: "user123",

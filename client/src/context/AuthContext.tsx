@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from "axios";
+import {generateAccessTokenFromRefreshToken, getProfile} from "@/services/authService";
 
 // Define user interface
 export interface User {
@@ -10,7 +12,6 @@ export interface User {
   email: string;
   name?: string;
   roles?: string[];
-  accountType?: string;
   oAuthProvider?: string | null;
   avatarUrl?: string | null;
 }
@@ -35,7 +36,6 @@ export interface RegisterData {
   password: string;
   name: string;
   birthday?: string;
-  accountType?: string;
 }
 
 // Create auth context
@@ -56,34 +56,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/v1/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          setIsAuthenticated(true);
-        } else {
-          // Clear any stale data
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } catch (err) {
-        console.error('Auth check error:', err);
-        setUser(null);
-        setIsAuthenticated(false);
+        const response = await getProfile()
+        setUser(response.data);
+        setIsAuthenticated(true);
+      } catch{
+        await tryRefreshToken();
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAuthStatus();
-  }, [API_URL]);
+  }, []);
+
+
+  const tryRefreshToken = async () =>{
+    try{
+      const resp = await generateAccessTokenFromRefreshToken();
+      console.log(resp.data);
+      const res = await getProfile()
+      console.log(res);
+      setUser(res.data);
+      setIsAuthenticated(true);
+    }catch(err){
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsLoading(false);
+      router.push('/auth');
+    }
+  }
 
   // Login function
   const login = async (username: string, password: string): Promise<boolean> => {
@@ -91,54 +92,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
+      // Check login response status
+      const response = await axios.post(
+          `${API_URL}/api/v1/auth/login`,
+          { username, password },
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(errorData.message || 'Login failed');
+      // Verify login was successful
+      if (response.status !== 200) {
+        setError('Login failed');
         setIsLoading(false);
         return false;
       }
 
-      const userData = await response.json();
-      
-      // Call /me endpoint to get full user profile
-      const profileResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
-        method: 'GET',
-        credentials: 'include',
+      // Fetch user profile
+      const profileResponse = await axios.get(`${API_URL}/api/v1/auth/me`, {
+        withCredentials: true,
       });
-      
-      if (profileResponse.ok) {
-        const profileData = await profileResponse.json();
-        setUser(profileData);
+
+      if (profileResponse.status === 200) {
+        setUser(profileResponse.data);
         setIsAuthenticated(true);
         setIsLoading(false);
         return true;
       } else {
-        // Use token response data as fallback
-        setUser({
-          id: userData.id || 'unknown',
-          username: username,
-          email: userData.email || 'unknown',
-        });
-        setIsAuthenticated(true);
+        setError('Failed to fetch profile info');
         setIsLoading(false);
-        return true;
+        return false;
       }
     } catch (err) {
-      console.error('Login error:', err);
-      setError('An unexpected error occurred');
+      if (axios.isAxiosError(err) && err.response) {
+        const errorMessage = err.response.data?.message || 'Login failed';
+        setError(errorMessage);
+      } else {
+        setError('An unexpected error occurred');
+      }
       setIsLoading(false);
       return false;
     }
   };
+
 
   // Register function
   const register = async (userData: RegisterData): Promise<boolean> => {
@@ -146,17 +145,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/auth/register`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
+
+      const response = await axios.post(`${API_URL}/api/v1/auth/register`, {
+        withCredentials: true,
+        headers:{
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(userData),
-      });
+      })
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (response.status !== 200) {
+        const errorData = await response.data;
         setError(errorData.message || 'Registration failed');
         setIsLoading(false);
         return false;
@@ -175,18 +174,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout function
   const logout = async (): Promise<void> => {
     setIsLoading(true);
-
     try {
-      await fetch(`${API_URL}/api/v1/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+
+      await axios.post(`${API_URL}/api/v1/auth/logout`,{}, {
+        withCredentials: true,
+      })
+
 
       // Clear auth state regardless of response
       setUser(null);
       setIsAuthenticated(false);
       
-      // Redirect to login page
+      // Redirect to login pagepos
       router.push('/auth');
     } catch (err) {
       console.error('Logout error:', err);

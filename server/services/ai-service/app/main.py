@@ -1,7 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import os
 import time
 import logging
 from app.config import Settings, EurekaClient
@@ -17,7 +16,7 @@ from app.routes.flashcards import router as flashcards_router
 from app.routes.summarizer import router as summarizer_router
 from app.routes.test_note import router as test_note_router
 from app.routes.voice_assistant import router as voice_assistant_router
-from app.routes.web_sockets import router as web_sockets_router
+from app.routes.web_sockets import websocket_endpoint
 
 # And add this line after your other app.include_router() calls:
 
@@ -36,22 +35,18 @@ app = FastAPI(
     description="AI service for processing PDFs and generating study materials"
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Update this with specific origins in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 
 app.include_router(flashcards_router, prefix=settings.API_PREFIX)
 app.include_router(summarizer_router, prefix=settings.API_PREFIX)
 app.include_router(test_note_router, prefix=settings.API_PREFIX)
 app.include_router(voice_assistant_router, prefix=settings.API_PREFIX)
-app.include_router(web_sockets_router, prefix=settings.API_PREFIX)
+# app.include_router(websocket_endpoint, prefix=settings.API_PREFIX)
+
+
+@app.websocket(f"{settings.API_PREFIX}/ws")
+async def websocket_route(websocket: WebSocket, sessionId: str, recover: bool = False, last_message_id: str = None):
+    session_id = sessionId
+    await websocket_endpoint(websocket, session_id, recover, last_message_id)
 
 
 
@@ -69,6 +64,8 @@ async def startup_event():
     print(f"Port: {eureka_client.port}")
     print(f"Instance ID: {eureka_client.instance_id}")
     print(f"Eureka Server: {eureka_client.eureka_server_url}")
+
+
 
     # Initialize database collections and indexes with error handling
     try:

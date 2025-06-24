@@ -28,6 +28,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
+import {useAuth} from "@/context/AuthContext";
+
 export function NavUser({
   user,
 }: {
@@ -37,6 +39,13 @@ export function NavUser({
     avatar: string
   }
 }) {
+
+  const {logout} = useAuth()
+
+  const logoutHandler = async () => {
+     await logout();
+  }
+
   const { isMobile } = useSidebar()
   return (
     <SidebarMenu>
@@ -99,7 +108,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => logoutHandler()}>
               <LogOut />
               Log out
             </DropdownMenuItem>

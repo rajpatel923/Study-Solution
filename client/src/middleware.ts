@@ -1,6 +1,8 @@
 // middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {generateAccessTokenFromRefreshToken} from "@/services/authService";
+
 
 export function middleware(request: NextRequest) {
   // Get the pathname of the request

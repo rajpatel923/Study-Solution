@@ -13,6 +13,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { X, Loader2 } from "lucide-react";
 import flashcardService from "@/services/flashcardService";
+import {useAuth} from "@/context/AuthContext";
 
 export default function FlashcardCreationForm() {
   const {
@@ -33,6 +34,8 @@ export default function FlashcardCreationForm() {
     setSampleFlashcards,
     setError,
   } = useFlashcardContext();
+
+  const {user} = useAuth()
 
   const formRef = useRef<HTMLDivElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,14 +74,13 @@ export default function FlashcardCreationForm() {
     try {
       const flashcardData = {
         content_url: uploadedDocument.publicUrl || "",
-        user_id: "5", // Replace with actual user ID from auth context
+        user_id: user?.username,
         difficulty_level: difficultyLevel,
         card_count: cardCount,
         tags: tags,
         focus_areas: focusAreas.length > 0 ? focusAreas : undefined,
       };
-      
-      // Perform slide-out animation
+
       if (formRef.current) {
         await gsap.to(formRef.current, {
           opacity: 0,
@@ -93,16 +95,13 @@ export default function FlashcardCreationForm() {
       const response = await flashcardService.createFlashcards(flashcardData);
       
       if (response.status === "success" && response.flashcard_set_id) {
-        // Save the flashcard set ID and document ID to context
-        console.log("Flashcard set created successfully:", response);
+
         setFlashcardSetId(response.flashcard_set_id);
         setDocumentId(response.document_id || null);
         
         if (response.sample_flashcards) {
           setSampleFlashcards(response.sample_flashcards);
         }
-        
-        // After successful creation, move to display state
         setTimeout(() => {
           setWorkflowState(FlashcardWorkflowState.DISPLAY);
         }, 1000);
@@ -111,7 +110,6 @@ export default function FlashcardCreationForm() {
         setWorkflowState(FlashcardWorkflowState.ERROR);
       }
     } catch (error: any) {
-      console.error("Error creating flashcards:", error);
       setError(error.message || "An error occurred while creating flashcards");
       setWorkflowState(FlashcardWorkflowState.ERROR);
     } finally {

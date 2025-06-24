@@ -5,16 +5,15 @@ import { FlashcardProvider, useFlashcardContext, FlashcardWorkflowState } from "
 import UploadForm from "@/components/study-tools/summarizer/UploadForm";
 import FlashcardCreationForm from "@/components/study-tools/flashcards/FlashcardCreationForm";
 import FlashcardDisplay from "@/components/study-tools/flashcards/FlashCardDisplay";
-import { Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import AnimatedBackground from "@/components/study-tools/summarizer/AnimatedBackground";
 import LoadingState from "@/components/study-tools/flashcards/LoadingState";
 import { toast } from "sonner";
 import documentService from "@/services/documentService";
 import "@/app/(public)/dashboard/(study-tools)/create-flashcards/flashcard-styles.css";
+import {useAuth} from "@/context/AuthContext";
 
-// Main content component that uses the context
 function FlashcardContent() {
   const { 
     workflowState, 
@@ -24,15 +23,15 @@ function FlashcardContent() {
     resetContext 
   } = useFlashcardContext();
 
-  // Handle file upload
+  const { user } = useAuth();
+
   const handleFileUpload = async (file: File) => {
     try {
-      // Call actual document service
-      const response = await documentService.uploadDocument(file);
+      const response = await documentService.uploadDocument(file, user?.username);
       
       if (response.success) {
         setUploadedDocument({
-          id: response.id || 0,
+          id: response.id,
           fileName: response.fileName || file.name,
           publicUrl: response.publicUrl || "",
           message: "Document uploaded successfully",
@@ -44,26 +43,13 @@ function FlashcardContent() {
         throw new Error(response.message || "Upload failed");
       }
     } catch (error: any) {
-      console.error("Error uploading document:", error);
       toast.error(error.message || "Failed to upload document");
       resetContext();
     }
   };
 
-  // Handle URL upload
   const handleUrlUpload = async (url: string) => {
     try {
-      // Call actual document service
-      //const response = await documentService.uploadFromUrl(url);
-      
-      // if (response.success) {
-      //   setUploadedDocument({
-      //     id: response.id || 0,
-      //     fileName: response.fileName || "URL Document",
-      //     publicUrl: response.publicUrl || url,
-      //     message: "Document uploaded successfully", 
-      //     success: true
-      //   });
         setUploadedDocument({
           id: 0,
           fileName: "URL Document",
@@ -75,13 +61,11 @@ function FlashcardContent() {
         toast.success("URL processed successfully");
       
     } catch (error: any) {
-      console.error("Error processing URL:", error);
       toast.error(error.message || "Failed to process URL");
       resetContext();
     }
   };
 
-  // Render different components based on the workflow state
   const renderContent = () => {
     switch (workflowState) {
       case FlashcardWorkflowState.UPLOAD:
@@ -107,6 +91,7 @@ function FlashcardContent() {
         
       case FlashcardWorkflowState.GENERATING:
         return (
+            //todo create a processing funtion for the loading state.
           <LoadingState
             message="Generating Flashcards"
             subMessage="Our AI is analyzing your document and creating personalized flashcards for you. This might take a minute or two depending on the document size."
@@ -140,7 +125,6 @@ function FlashcardContent() {
 
   return (
     <div className="min-h-screen py-12 px-4 relative">
-      <AnimatedBackground />
       <div className="relative z-10">
         {renderContent()}
       </div>
@@ -148,7 +132,7 @@ function FlashcardContent() {
   );
 }
 
-// Page component wrapped with provider
+
 export default function FlashcardsPage() {
   return (
     <FlashcardProvider>

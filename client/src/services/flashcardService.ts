@@ -66,23 +66,20 @@ export interface FlashcardSetResponse {
   };
 }
 
-// Use environment variable with fallback
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_BACKEND_URL;
 
-// Create an axios instance with default configs
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/flashcards`,
+  baseURL: `${API_BASE_URL}/aiservice/api/v1/flashcards`,
   headers: {
     "Content-Type": "application/json",
   },
   withCredentials: true,
-  timeout: 1500000, // 15 seconds timeout
+  timeout: 1500000,
 });
 
-// API service for flashcard operations
 const flashcardService = {
-  // Create flashcards from content
+
   createFlashcards: async (
     flashcardData: FlashcardCreate
   ): Promise<FlashcardResponse> => {
@@ -92,7 +89,7 @@ const flashcardService = {
         flashcardData,
         {
           headers: {
-            "X-User-ID": flashcardData.user_id || "user123",
+            "X-User-ID": flashcardData.user_id,
           },
         }
       );
@@ -111,19 +108,12 @@ const flashcardService = {
     }
   },
 
-  // Get flashcards by set ID
   getFlashcardsBySet: async (
     setId: string,
-    userId: string
   ): Promise<FlashcardSetResponse> => {
     try {
       const response: AxiosResponse<FlashcardSetResponse> = await api.get(
-        `/set/${setId}`,
-        {
-          headers: {
-            "X-User-ID": userId,
-          },
-        }
+        `/set/${setId}`
       );
       return response.data;
     } catch (error: any) {
