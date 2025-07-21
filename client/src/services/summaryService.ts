@@ -115,7 +115,7 @@ const summaryService = {
 
   // Get all summaries for a user
   getUserSummaries: async (
-    userId: string,
+    userId: string | number | undefined,
     limit: number = 10
   ): Promise<SummaryResponse> => {
     try {
@@ -174,7 +174,7 @@ const summaryService = {
   // Delete a summary
   deleteSummary: async (
     summaryId: string,
-    userId?: string
+    userId?: string | number | undefined
   ): Promise<SummaryResponse> => {
     try {
       // If userId is not provided, use the default

@@ -206,7 +206,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div>
+    <div className="p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>

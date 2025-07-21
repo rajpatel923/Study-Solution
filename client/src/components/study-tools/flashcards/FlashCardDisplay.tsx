@@ -71,7 +71,6 @@ export default function FlashcardDisplay() {
       try {
         const response = await flashcardService.getFlashcardsBySet(
           flashcardSetId,
-          "5" // Replace with actual user ID from auth context
         );
         
         if (response.status === "success" && response.flashcards) {

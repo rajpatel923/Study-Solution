@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import documentService from "@/services/documentService";
 import "@/app/(public)/dashboard/(study-tools)/create-flashcards/flashcard-styles.css";
 import {useAuth} from "@/context/AuthContext";
+import FlashcardCTA from "@/components/study-tools/flashcards/FlashcardCTA";
 
 function FlashcardContent() {
   const { 
@@ -136,7 +137,10 @@ function FlashcardContent() {
 export default function FlashcardsPage() {
   return (
     <FlashcardProvider>
-      <FlashcardContent />
+      <section className="p-6 lg:p-8">
+        <FlashcardCTA/>
+        <FlashcardContent />
+      </section>
     </FlashcardProvider>
   );
 }

@@ -12,9 +12,11 @@ import LoadingSpinner from "@/components/library/summary/LoadingSpinner";
 import EmptyState from "@/components/library/summary/EmptyState";
 import { toast } from "sonner";
 import { Summary, SummariesResponse } from "@/lib/summary";
+import {useAuth} from "@/context/AuthContext";
 
 export default function SavedSummariesPage() {
   const router = useRouter();
+  const {user} = useAuth();
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [filteredSummaries, setFilteredSummaries] = useState<Summary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,7 +29,7 @@ export default function SavedSummariesPage() {
     dateRange: "all",
     searchQuery: ""
   });
-  const userId = "user123"; // In a real app, this would come from auth
+  const userId = user?.id
 
   useEffect(() => {
     // Animation for page entrance
@@ -44,7 +46,7 @@ export default function SavedSummariesPage() {
   const fetchSummaries = async () => {
     try {
       setIsLoading(true);
-      const response = await summaryService.getUserSummaries(userId, limit) as SummariesResponse;
+      const response = await summaryService.getUserSummaries(userId, limit) as unknown as SummariesResponse;
       
       if (response.status === "success") {
         setSummaries(response.summaries);
@@ -146,7 +148,7 @@ export default function SavedSummariesPage() {
     // Filter by date range
     if (filters.dateRange !== "all") {
       const now = new Date();
-      let dateThreshold = new Date();
+      const dateThreshold = new Date();
       
       switch (filters.dateRange) {
         case "today":
@@ -205,7 +207,7 @@ export default function SavedSummariesPage() {
   }, []);
 
   return (
-    <div className="container mx-auto px-4 py-8 page-content">
+    <div className="container mx-auto p-6 lg:p-8 page-content">
       <PageHeader 
         totalCount={totalCount} 
         sortBy={sortBy}
