@@ -5,6 +5,7 @@ import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from 'next/navigation';
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 
@@ -34,8 +35,9 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function AuthPage() {
   const router = useRouter();
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authError, setAuthError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const [authMode, setAuthMode] = useState(searchParams.get('authMode') || 'login');
   
   // Use our auth context
   const { login, register: authRegister, isAuthenticated, isLoading, error } = useAuth();
@@ -129,14 +131,14 @@ export default function AuthPage() {
         </span>
         <div className="flex space-x-4 bg-darkLight items-center p-1 rounded-full">
           <Button 
-            onClick={() => setAuthMode("login")}
-            className={`rounded-full ${authMode === "login" ? "text-white" : " border-0 bg-transparent shadow-none hover:text-white hover:bg-transparent "}`}
+            onClick={() => setAuthMode("sign-in")}
+            className={`rounded-full ${authMode === "sign-in" ? "text-white" : " border-0 bg-transparent shadow-none hover:text-white hover:bg-transparent "}`}
           >
             Log In
           </Button>
           <Button
-            onClick={() => setAuthMode("signup")}
-            className={`rounded-full ${authMode === "signup" ? "text-white" : "border-0 bg-transparent shadow-none hover:text-white hover:bg-transparent"}`}
+            onClick={() => setAuthMode("sign-up")}
+            className={`rounded-full ${authMode === "sign-up" ? "text-white" : "border-0 bg-transparent shadow-none hover:text-white hover:bg-transparent"}`}
           >
             Sign Up
           </Button>
@@ -151,7 +153,7 @@ export default function AuthPage() {
       )}
 
       {/* Login Form */}
-      {authMode === "login" && (
+      {authMode === "sign-in" && (
         <>
           {/* Heading */}
           <h1 className="text-4xl font-bold mb-6 text-center">Hi there!</h1>
@@ -199,7 +201,7 @@ export default function AuthPage() {
           <div className="mt-4 text-center">
             <span className="text-white">Dont have an account?</span>{" "}
             <button
-              onClick={() => setAuthMode("signup")}
+              onClick={() => setAuthMode("sign-up")}
               className="text-yellow-300 hover:underline"
               disabled={isLoading}
             >
@@ -210,7 +212,7 @@ export default function AuthPage() {
       )}
 
       {/* Signup Form */}
-      {authMode === "signup" && (
+      {authMode === "sign-up" && (
         <>
           {/* Heading */}
           <h1 className="text-3xl font-bold mb-1 text-center">Join the StudySync side.</h1>

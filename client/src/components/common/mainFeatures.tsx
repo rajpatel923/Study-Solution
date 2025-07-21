@@ -1,81 +1,86 @@
-import React from "react";
-import Image from "next/image";
+import {
+  Code,
+  Terminal,
+  Paintbrush,
+  Rocket,
+  Book,
+  PlusCircle,
+} from 'lucide-react';
 
-const MainFeatures = () => {
+const features = [
+  {
+    icon: <Code className="h-6 w-6" />,
+    title: 'Developer-Friendly',
+    desc: 'Tailored for developers to create and iterate fast, with minimal overhead and maximum flexibility.',
+  },
+  {
+    icon: <Terminal className="h-6 w-6" />,
+    title: 'CLI Support',
+    desc: 'Command-line interface support for seamless development and workflow integration.',
+  },
+  {
+    icon: <Paintbrush className="h-6 w-6" />,
+    title: 'Easily Customizable',
+    desc: 'Every block is built to be editable. From layout to logic, style to structure—make it your own.',
+  },
+  {
+    icon: <Rocket className="h-6 w-6" />,
+    title: 'v0 Support',
+    desc: 'Launch fast with confidence. Perfect for MVPs, prototypes, and weekend projects.',
+  },
+  {
+    icon: <Book className="h-6 w-6" />,
+    title: 'Full Documentation',
+    desc: 'Comprehensive documentation to understand every feature and maximize your development experience.',
+  },
+  {
+    icon: <PlusCircle className="h-6 w-6" />,
+    title: 'Contribute Yours',
+    desc: 'Add your own blocks to the library and become part of the MVPBlocks community.',
+  },
+];
+export default function Feature1() {
   return (
-    <div className="bg-[#282929] text-white min-h-screen p-6 flex flex-col items-center">
-      {/* Hero Section */}
-      <div className="text-center max-w-2xl">
-        <h1 className="text-3xl font-bold">Become an academic weapon {">"} :)</h1>
-        <p className="text-gray-400 mt-2">
-          We are all about helping you learn efficiently and quicker.
-        </p>
-      </div>
-
-      {/* Features Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10 max-w-4xl text-center">
-        {/* Study Group Feature */}
-        <div className="bg-black p-6 rounded-lg shadow-lg flex flex-col items-center">
-          <h2 className="text-xl font-bold">Study Group</h2>
-          <p className="text-gray-400 mt-2">
-            Join a group study session and chat with your peers to enhance your learning experience.
-          </p>
-          <Image
-            src="/images/SS_groupimage.png"
-            alt="Study Group"
-            width={400}
-            height={250}
-            className="mt-4 rounded-lg"
-          />
+      <section className="relative py-14">
+        <div className="mx-auto max-w-screen-xl px-4 md:px-8">
+          <div className="relative mx-auto max-w-2xl sm:text-center">
+            <div className="relative z-10">
+              <h3 className="font-geist mt-4 text-3xl font-normal tracking-tighter sm:text-4xl md:text-5xl">
+                Let’s help build your MVP
+              </h3>
+              <p className="font-geist text-foreground/60 mt-3">
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec
+                congue, nisl eget molestie varius, enim ex faucibus purus.
+              </p>
+            </div>
+            <div
+                className="absolute inset-0 mx-auto h-44 max-w-xs blur-[118px]"
+                style={{
+                  background:
+                      'linear-gradient(152.92deg, rgba(192, 15, 102, 0.2) 4.54%, rgba(192, 11, 109, 0.26) 34.2%, rgba(192, 15, 102, 0.1) 77.55%)',
+                }}
+            ></div>
+          </div>
+          <hr className="bg-foreground/30 mx-auto mt-5 h-px w-1/2" />
+          <div className="relative mt-12">
+            <ul className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {features.map((item, idx) => (
+                  <li
+                      key={idx}
+                      className="transform-gpu space-y-3 rounded-xl border bg-transparent p-4 [box-shadow:0_-20px_80px_-20px_#ff7aa42f_inset]"
+                  >
+                    <div className="text-primary w-fit transform-gpu rounded-full border p-4 [box-shadow:0_-20px_80px_-20px_#ff7aa43f_inset] dark:[box-shadow:0_-20px_80px_-20px_#ff7aa40f_inset]">
+                      {item.icon}
+                    </div>
+                    <h4 className="font-geist text-lg font-bold tracking-tighter">
+                      {item.title}
+                    </h4>
+                    <p className="text-gray-500">{item.desc}</p>
+                  </li>
+              ))}
+            </ul>
+          </div>
         </div>
-
-        {/* AI Quiz Feature */}
-        <div className="bg-black p-6 rounded-lg shadow-lg flex flex-col items-center">
-          <h2 className="text-xl font-semibold">AI Quiz Generator</h2>
-          <p className="text-gray-300 mt-2">
-            Generate quizzes instantly based on your study material.
-          </p>
-          <Image
-            src="/images/SS_quizimage.png"
-            alt="AI Quiz"
-            width={400}
-            height={250}
-            className="mt-4 rounded-lg"
-          />
-        </div>
-
-        {/* AI Flashcards (PDF Uploader) Feature */}
-        <div className="bg-black p-6 rounded-lg shadow-lg flex flex-col items-center">
-          <h2 className="text-xl font-semibold">AI Flashcards</h2>
-          <p className="text-gray-400 mt-2">
-            Upload a PDF and AI will create flashcards for you to study efficiently.
-          </p>
-          <Image
-            src="/images/SS_pdfuploaderimage.png"
-            alt="AI Flashcards"
-            width={400}
-            height={250}
-            className="mt-4 rounded-lg"
-          />
-        </div>
-
-        {/* New Feature Section */}
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex flex-col items-center">
-          <h2 className="text-xl font-semibold">Performance Tracking</h2>
-          <p className="text-gray-300 mt-2">
-            AI-powered notes summarization to help you grasp key concepts quickly.
-          </p>
-          <Image
-            src="/images/SS_performance.png"
-            alt="Smart Notes"
-            width={400}
-            height={250}
-            className="mt-4 rounded-lg"
-          />
-        </div>
-      </div>
-    </div>
+      </section>
   );
-};
-
-export default MainFeatures;
+}

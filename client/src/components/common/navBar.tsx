@@ -1,102 +1,225 @@
-"use client";
-
-import { useState } from "react";
-import Link from "next/link";
-import { Menu, X, Search } from "lucide-react";
+'use client';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, easeInOut } from 'framer-motion';
+import { Menu, X, ArrowRight, Zap, Search } from 'lucide-react';
+import Link from 'next/link';
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-
-const navLinks = [
-  { href: "#home", label: "Home" },
-  { href: "#explore", label: "Explore" },
-  { href: "#exam", label: "Exams" },
+interface NavItem {
+  name: string;
+  href: string;
+}
+const navItems: NavItem[] = [
+  { name: 'Home', href: '/' },
+  { name: 'Features', href: '/features' },
+  { name: 'Solutions', href: '/solutions' },
+  { name: 'Pricing', href: '/pricing' },
+  { name: 'Resources', href: '/resources' },
+  { name: 'Contact', href: '/contact' },
 ];
-
-export default function NavBar() {
-  const [isOpen, setIsOpen] = useState(false);
-
+export default function Header2() {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  const containerVariants = {
+    hidden: { opacity: 0, y: -20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        staggerChildren: 0.1,
+      },
+    },
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: -10 },
+    visible: { opacity: 1, y: 0 },
+  };
+  const mobileMenuVariants = {
+    closed: {
+      opacity: 0,
+      x: '100%',
+      transition: {
+        duration: 0.3,
+        ease: easeInOut,
+      },
+    },
+    open: {
+      opacity: 1,
+      x: 0,
+      transition: {
+        duration: 0.3,
+        ease: easeInOut,
+        staggerChildren: 0.1,
+      },
+    },
+  };
+  const mobileItemVariants = {
+    closed: { opacity: 0, x: 20 },
+    open: { opacity: 1, x: 0 },
+  };
   return (
-    <header className="fixed w-full top-0 left-0 bg-dark z-50">
-      <nav className="container mx-auto flex items-center justify-between px-navPaddingX py-navPaddingY">
-        {/* Logo */}
-        <Link href="/" className="flex items-center">
-          <Image src="/images/logo.png" alt="Logo" width={48} height={48} />
-        </Link>
-
-        {/* Combined Nav Links and Search */}
-        <div className="hidden md:flex items-center space-x-8">
-          {/* Navigation Links */}
-          <div className="flex items-center space-x-6">
-            {navLinks.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className="text-white text-lg font-medium hover:text-primaryCustome"
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex items-center bg-darkAccent rounded-md w-[400px] px-3 py-2">
-            <Search className="text-textGray" size={18} />
-            <input
-              type="text"
-              placeholder="Search for anything"
-              className="bg-transparent text-white placeholder-textGray px-2 w-full focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div className="hidden md:flex items-center space-x-4">
-          <Link href={"/auth"}>
-            <Button variant="outline" className="rounded-md border-borderColor bg-transparent text-white px-buttonPaddingX py-buttonPaddingY font-normal ">
-              Login
-            </Button>
-          </Link>
-          <Link href={"/auth"}>
-            <Button className="rounded-md bg-primaryCustome hover:bg-primaryHover text-white px-buttonPaddingX py-buttonPaddingY font-semibold">
-              Get Started
-            </Button>
-          </Link>
-        </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          className="md:hidden text-white"
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Toggle menu"
+      <>
+        <motion.header
+            className={`fixed top-0 right-0 left-0 z-50 transition-all duration-500 ${
+                isScrolled
+                    ? 'border-border/50 bg-background/80 border-b shadow-sm backdrop-blur-md'
+                    : 'bg-transparent'
+            }`}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
         >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </nav>
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+            <div className="flex h-16 items-center justify-between">
+              <motion.div
+                  className="flex items-center space-x-3"
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              >
+                <Link href="/" className="flex items-center space-x-3">
 
-      {/* Mobile Navigation */}
-      {isOpen && (
-        <div className="md:hidden bg-dark p-4 space-y-4">
-          {navLinks.map(({ href, label }) => (
-            <Link key={href} href={href} className="block text-white text-lg">
-              {label}
-            </Link>
-          ))}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full px-4 py-2 bg-darkAccent text-white rounded-md placeholder-textGray focus:ring-2 focus:ring-primaryCustome"
-              aria-label="Search"
-            />
+                  <Image src="/images/logo.png" alt="Logo" width={50} height={50} />
+                  <div className="flex flex-col">
+                  <span className={`text-black text-lg font-bold` }>
+                    Study Sync
+                  </span>
+                  </div>
+                </Link>
+              </motion.div>
+              <nav className="hidden  items-center space-x-1 lg:flex">
+                {navItems.map((item, index) => (
+                    <motion.div
+                        key={item.name}
+                        variants={itemVariants}
+                        className="relative"
+                        onMouseEnter={() => setHoveredItem(item.name)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                    >
+                      <Link
+                          href={item.href}
+                          className={`relative text-black hover:text-black rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200`}
+                      >
+                        {hoveredItem === item.name && (
+                            <motion.div
+                                className="bg-muted absolute inset-0 rounded-lg"
+                                layoutId="navbar-hover"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{
+                                  type: 'spring',
+                                  stiffness: 400,
+                                  damping: 30,
+                                }}
+                            />
+                        )}
+                        <span className="relative  z-10">{item.name}</span>
+                      </Link>
+                    </motion.div>
+                ))}
+              </nav>
+              <motion.div
+                  className="hidden items-center space-x-3 lg:flex"
+                  variants={itemVariants}
+              >
+                <Link
+                    href="/auth?authMode=sign-in"
+                    className={`text-black hover:bg-white hover:text-black  rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200`}
+                >
+                  Sign In
+                </Link>
+                <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                >
+                  <Link
+                      href="/auth?authMode=sign-up"
+                      className="bg-primaryCustome text-background text-black hover:bg-primaryCustome/90 inline-flex items-center space-x-2 rounded-lg px-5 py-2.5 text-md font-medium shadow-sm transition-all duration-200"
+                  >
+                    <span>Get Started</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </motion.div>
+              </motion.div>
+              <motion.button
+                  className="text-white hover:bg-muted hover:text-black rounded-lg p-2 transition-colors duration-200 lg:hidden"
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  variants={itemVariants}
+                  whileTap={{ scale: 0.95 }}
+              >
+                {isMobileMenuOpen ? (
+                    <X className="h-6 w-6" />
+                ) : (
+                    <Menu className="h-6 w-6" />
+                )}
+              </motion.button>
+            </div>
           </div>
-          <Button variant="outline" className="w-full mt-2 rounded-md border-borderColor text-white font-normal">
-            Login
-          </Button>
-          <Button className="w-full mt-2 rounded-md bg-primaryCustome hover:bg-primaryHover text-white font-normal">
-            Get Started
-          </Button>
-        </div>
-      )}
-    </header>
+        </motion.header>
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+              <>
+                <motion.div
+                    className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <motion.div
+                    className="border-border bg-background fixed top-16 right-4 z-50 w-80 overflow-hidden rounded-2xl border shadow-2xl lg:hidden"
+                    variants={mobileMenuVariants}
+                    initial="closed"
+                    animate="open"
+                    exit="closed"
+                >
+                  <div className="space-y-6 p-6">
+                    <div className="space-y-1">
+                      {navItems.map((item) => (
+                          <motion.div key={item.name} variants={mobileItemVariants}>
+                            <Link
+                                href={item.href}
+                                className="text-foreground hover:bg-muted block rounded-lg px-4 py-3 font-medium transition-colors duration-200"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                            >
+                              {item.name}
+                            </Link>
+                          </motion.div>
+                      ))}
+                    </div>
+                    <motion.div
+                        className="border-border space-y-3 border-t pt-6"
+                        variants={mobileItemVariants}
+                    >
+                      <Link
+                          href="/login"
+                          className="text-foreground hover:bg-muted block w-full rounded-lg py-3 text-center font-medium transition-colors duration-200"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        Sign In
+                      </Link>
+                      <Link
+                          href="/signup"
+                          className="bg-foreground text-background hover:bg-foreground/90 block w-full rounded-lg py-3 text-center font-medium transition-all duration-200"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        Get Started
+                      </Link>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              </>
+          )}
+        </AnimatePresence>
+      </>
   );
 }

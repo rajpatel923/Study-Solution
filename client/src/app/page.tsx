@@ -1,12 +1,12 @@
-import ComparingSection from "@/components/common/comparingSection";
+import AboutUs from "@/components/common/aboutUs";
 import HeroSection from "@/components/common/heroSection";
 import MainFeatures from "@/components/common/mainFeatures";
 import NavBar from "@/components/common/navBar";
 
 
 import Footer from "@/components/common/footer";
-import Advertisement from "@/components/common/advertisement";
-import AllFeatures from "@/components/common/allFeatures";
+import Pricing from "@/components/common/pricing";
+import TestimonialsCarousel from "@/components/common/testimonialsCarousel";
 
 
 export default function Home() {
@@ -14,10 +14,10 @@ export default function Home() {
     <div>
         <NavBar/>
         <HeroSection/>
-        <ComparingSection/>
+        <AboutUs/>
         <MainFeatures/>
-        <Advertisement/>
-        <AllFeatures/>
+        <Pricing/>
+        <TestimonialsCarousel/>
         <Footer/> 
     </div>
   );

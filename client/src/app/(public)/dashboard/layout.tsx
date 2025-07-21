@@ -4,7 +4,6 @@
 import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import Loader from '@/components/common/loading';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { PlusCircle, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"

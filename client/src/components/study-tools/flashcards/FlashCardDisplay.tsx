@@ -6,7 +6,7 @@ import { useFlashcardContext, FlashcardWorkflowState } from "@/context/Flashcard
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, RotateCcw, ArrowLeft, Loader2, Save, ExternalLink } from "lucide-react";
+import { RotateCcw, ArrowLeft, Loader2, Save } from "lucide-react";
 import flashcardService from "@/services/flashcardService";
 import FlashcardNavigation from "./FlashcardNavigation";
 import { useRouter } from "next/navigation";
