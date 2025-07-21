@@ -8,15 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-// import TipTapEditor from "@/components/common/tiptap-editor/TipTapEditor";
 import EnhancedEditor from "@/components/common/tiptap-editor/pEditor";
 
-// Optional: Add a function to convert plain markdown to HTML if needed
-const convertMarkdownToHTML = (markdown) => {
-  // This is a very basic conversion - you might want to use a proper library
-  // For testing only - replace this with a proper markdown library
-  return markdown;
-};
 
 const SummaryEditPage = () => {
   const params = useParams();

@@ -5,8 +5,8 @@ import { gsap } from "gsap";
 import SummaryOptions from "@/components/study-tools/summarizer/SummaryOptions";
 import DocumentList from "@/components/study-tools/summarizer/DocumentList";
 import DemoSection from "@/components/study-tools/summarizer/DemoSection";
-import StatsSection from "@/components/study-tools/summarizer/StateSection";
 import { AppProvider } from "@/context/AppContext";
+import SummaryCTA from "@/components/study-tools/summarizer/summaryCTA";
 
 const Summarizer = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -25,15 +25,14 @@ const Summarizer = () => {
 
   return (
     <AppProvider>
-      <div className="relative   overflow-y-auto">
+      <div className="relative">
         <div
           ref={containerRef}
           className="w-full min-h-[calc(100vh-4rem)]  p-6 lg:p-8"
         >
+          <SummaryCTA />
           <SummaryOptions />
-
           <DocumentList />
-
           <DemoSection />
         </div>
       </div>

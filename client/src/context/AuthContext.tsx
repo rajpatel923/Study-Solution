@@ -14,6 +14,7 @@ export interface User {
   roles?: string[];
   oAuthProvider?: string | null;
   avatarUrl?: string | null;
+  plan?: string;
 }
 
 // Define auth context interface

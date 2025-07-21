@@ -157,4 +157,11 @@ export const sideBarData = {
       icon: Map,
     },
   ],
+  DashBoard:[
+    {
+      name: "Dashboard",
+      url: "/dashboard",
+      icon: HomeIcon,
+    },
+  ]
 };

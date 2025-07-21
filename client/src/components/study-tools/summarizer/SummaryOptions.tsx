@@ -126,7 +126,6 @@ export default function SummaryOptions() {
               In &lt; 90 seconds StudySync will read your document and tell you all the important stuff in it.
             </p>
           </div>
-
           <UploadWorkflow />
         </CardContent>
       </Card>
