@@ -1,4 +1,3 @@
-
 const SummaryCTA = () => {
     return (
         <div className="relative mb-10 w-full overflow-hidden rounded-[40px] bg-orange-500 p-6 sm:p-10 md:p-20">

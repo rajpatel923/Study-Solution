@@ -2,12 +2,16 @@
 
 import React, { useRef, useEffect } from "react";
 import { gsap } from "gsap";
-import { useAppContext } from "@/context/AppContext";
+import {useSummarySelectors} from "@/context/SummaryStore";
 import { FileText, CheckCircle, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function DocumentList() {
-  const { files, results, setCurrentFile, setCurrentResult, removeFile } = useAppContext();
+
+  const files = useSummarySelectors.useFiles()
+  const results = useSummarySelectors.useResults()
+  const {setCurrentFile, removeFile} = useSummarySelectors.useFileActions()
+  const {setCurrentResult} = useSummarySelectors.useResultActions()
   const listRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
@@ -59,12 +63,7 @@ export default function DocumentList() {
                   <div>
                     <h3 className="font-medium">{file.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {new Intl.DateTimeFormat('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }).format(file.uploadedAt)}
+                      {file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString() : "Unknown date"}
                       {' • '}
                       {formatFileSize(file.size)}
                     </p>

@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { gsap } from "gsap";
-import { useAppContext } from "@/context/AppContext";
 import UploadForm from "./UploadForm";
 import SummaryPreferencesForm, { SummaryPreferences } from "./SummaryPreferenceForm";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import documentService from "@/services/documentService";
 import summaryService, { SummaryCreate } from "@/services/summaryService";
 import { useRouter } from "next/navigation";
 import {useAuth} from "@/context/AuthContext";
+import {useSummarySelectors} from "@/context/SummaryStore";
 
 enum WorkflowState {
   UPLOAD,
@@ -31,7 +31,7 @@ interface UploadedFile {
 }
 
 export default function UploadWorkflow() {
-  const { addFile } = useAppContext();
+  const {addFile} = useSummarySelectors.useFileActions()
   const { user } = useAuth()
   const [workflowState, setWorkflowState] = useState<WorkflowState>(WorkflowState.UPLOAD);
   const [uploadProgress, setUploadProgress] = useState(0);
