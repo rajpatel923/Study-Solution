@@ -143,7 +143,7 @@ const DocumentsPage: React.FC = () => {
   const handleDocumentClick = (document: Document) => {
     setSelectedDocument(document);
     setViewModalOpen(true);
-  };
+  }
 
   // Handle edit modal
   const handleEdit = (document: Document) => {

@@ -40,27 +40,27 @@ const iconComponents = {
 
 const defaultValues: AboutUsProps['values'] = [
   {
-    title: 'Innovation',
+    title: 'Student Centricity',
     description:
-        'We constantly push boundaries and explore new possibilities to create cutting-edge solutions.',
+        'Our tools are to make learning easier and more engaging for students of all backgrounds.',
     icon: 'Lightbulb',
   },
   {
-    title: 'Collaboration',
+    title: 'Efficiency',
     description:
-        'We believe in the power of teamwork and diverse perspectives to achieve extraordinary results.',
+        'We automate the tedious parts of studying, so students can focus on comprehension and retention.',
     icon: 'Users',
   },
   {
-    title: 'Excellence',
+    title: 'Innovation',
     description:
-        'We strive for perfection in everything we do, consistently delivering high-quality work.',
+        'We continuously integrate the lastest AI technologies to support new formats and adapt to diverse learning styles.',
     icon: 'Sparkles',
   },
   {
-    title: 'Impact',
+    title: 'Accessibility',
     description:
-        "We measure our success by the positive difference we make in people's lives and businesses.",
+        "Study Sync works across devices and supports different content sources to make learning inclusive.",
     icon: 'Globe',
   },
 ];
@@ -69,11 +69,11 @@ export default function AboutUs1() {
   const aboutData = {
     title: 'About Us',
     subtitle:
-        'Building the future of web development with beautiful, reusable components.',
+        'Creating a streamline studying process for modern students with AI-powered tools and resources.',
     mission:
-        'Our mission is to democratize web development by providing high-quality, customizable components that help developers build stunning websites quickly and efficiently.',
+        'Our mission is to empower students to achieve their academic goals by providing innovative, AI-driven tools that simplify the learning process and enhance productivity.',
     vision:
-        'We envision a world where creating beautiful websites is accessible to everyone, regardless of their design or development experience.',
+        'We believe students should spend less time on mundane tasks and more time on what truly matters: learning, growing, and achieving their goals.',
     values: defaultValues,
     className: 'relative overflow-hidden py-20',
   };
@@ -181,8 +181,7 @@ export default function AboutUs1() {
                 Our Core Values
               </h2>
               <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-lg">
-                The principles that guide everything we do and every decision we
-                make.
+                We are committed to upholding these core values in everything we do, ensuring that our tools and resources reflect our dedication to excellence and innovation.
               </p>
             </motion.div>
 
