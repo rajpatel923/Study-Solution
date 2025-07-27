@@ -13,7 +13,6 @@ const Summarizer = () => {
         <div
           className="w-full min-h-[calc(100vh-4rem)]  p-6 lg:p-8"
         >
-          <SummaryCTA />
           <SummaryOptions />
           <DocumentList />
           <DemoSection />

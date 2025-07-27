@@ -16,6 +16,11 @@ body {
   }
 }
 
+.animated-tab, .animated-card {
+  will-change: transform, opacity;
+}
+
+
 @layer base {
   :root {
     --background: 0 0% 100%;
