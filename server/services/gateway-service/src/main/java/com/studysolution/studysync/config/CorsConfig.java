@@ -19,13 +19,12 @@ public class CorsConfig {
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        corsConfig.setAllowedOrigins(Collections.singletonList("http://localhost:3001"));
+        corsConfig.setAllowedOrigins(Collections.singletonList(FRONTEND_URL));
         corsConfig.addAllowedMethod("*");
         corsConfig.addAllowedHeader("*");
         corsConfig.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Updated URL pattern to cover /api/v1/**
         source.registerCorsConfiguration("/**", corsConfig);
         return new CorsWebFilter(source);
     }

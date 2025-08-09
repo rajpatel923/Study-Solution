@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { AppSidebar } from '@/components/common/dashboard/appSidebar';
 import AnimatedBackground from "@/components/study-tools/summarizer/AnimatedBackground";
 import Footer from "@/components/common/footer";
-import { ThemeProvider } from "@/components/ui/theme-provider"
 import { Button } from "@/components/ui/button"
 import {ModeToggle} from "@/components/ui/modeToggle";
 
@@ -49,7 +48,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                       Upload document
                     </Button>
                     <ModeToggle/>
-                    {/*//todo: create three card hover button, token use limit, fire strick */}
                   </div>
                 </header>
               <AnimatedBackground />
@@ -58,7 +56,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </main>
           </div>
         </SidebarProvider>
-        {/*</ThemeProvider>*/}
       </>
   );
 }

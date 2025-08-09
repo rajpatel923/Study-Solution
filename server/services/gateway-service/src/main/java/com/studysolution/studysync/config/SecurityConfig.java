@@ -37,8 +37,6 @@ public class SecurityConfig {
     private final JwtUtil jwtUtil;
     private final ReactiveClientRegistrationRepository clientRegistrationRepository;
 
-    // Remove this direct dependency
-    // @Lazy private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
     @Value("${auth.white-list-urls}")
     private List<String> whiteListUrls;
@@ -64,7 +62,6 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
-                        // Use the injected parameter instead of the field
                         .authenticationSuccessHandler(oAuth2SuccessHandler)
                         .clientRegistrationRepository(clientRegistrationRepository)
                 )

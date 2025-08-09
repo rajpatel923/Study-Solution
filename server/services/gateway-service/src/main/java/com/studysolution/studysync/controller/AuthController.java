@@ -29,7 +29,6 @@ public class AuthController {
     public Mono<ResponseEntity<TokenResponse>> register(@RequestBody RegisterRequest request, ServerWebExchange exchange) {
         return authService.register(request)
                 .map(tokenResponse -> {
-                    // Set cookies after registration
                     ResponseCookie accessToken = CookieUtil.createAccessTokenCookie(
                             tokenResponse.getAccessToken(), tokenResponse.getExpiresIn());
                     ResponseCookie refreshToken = CookieUtil.createRefreshTokenCookie(
@@ -112,16 +111,13 @@ public class AuthController {
 
     @GetMapping("/me")
     public Mono<ResponseEntity<UserDTO>> getCurrentUser(ServerWebExchange exchange) {
-        // Get access token from cookie or header
         String accessToken = CookieUtil.extractAccessToken(exchange.getRequest());
 
-        // If no token, return unauthorized
         if (accessToken == null) {
             log.warn("No access token found in either cookie or header");
             return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
         }
 
-        // Now process the token
         return authService.getUserFromToken(accessToken)
                 .map(ResponseEntity::ok)
                 .onErrorResume(e -> {
