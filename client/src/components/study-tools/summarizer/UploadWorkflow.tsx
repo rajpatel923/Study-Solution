@@ -87,16 +87,14 @@ export default function UploadWorkflow() {
     }
   }, [workflowState]);
 
-  // Function to handle file upload
   const handleFileUpload = async (file: File) => {
     setWorkflowState(WorkflowState.UPLOADING);
     
     try {
-
       let progress = 0;
       const progressInterval = setInterval(() => {
         progress += 5;
-        if (progress <= 90) { // Only go up to 90% for visual feedback
+        if (progress <= 90) {
           setUploadProgress(progress);
         }
       }, 100);
@@ -150,7 +148,6 @@ export default function UploadWorkflow() {
     }
   };
 
-  //trying mech
   const pollSummaryStatus = async (summaryId: string) => {
     try {
 
@@ -170,19 +167,16 @@ export default function UploadWorkflow() {
             }, 500);
             return;
           }
-          
-          // If error, show error state
+
           if (summary.status === 'error') {
             throw new Error(summary.error_message || "Summary processing failed");
           }
-          
-          // Still processing, continue polling
+
           attempts++;
           if (attempts >= maxAttempts) {
             throw new Error("Summary processing timed out");
           }
-          
-          // Check again after a delay
+
           setTimeout(checkStatus, 3000);
         } catch (error: any) {
           console.error("Error polling summary status:", error);
@@ -190,8 +184,7 @@ export default function UploadWorkflow() {
           setWorkflowState(WorkflowState.ERROR);
         }
       };
-      
-      // Start polling
+
       checkStatus();
     } catch (error: any) {
       console.error("Error starting polling:", error);
@@ -200,21 +193,15 @@ export default function UploadWorkflow() {
     }
   };
 
-  // Function to handle preferences submission
-  // Function to handle preferences submission
-const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
+  const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
   setWorkflowState(WorkflowState.PROCESSING);
   setProcessingProgress(0);
   
   try {
-    // Create a variable to track if this is a URL submission
     const isUrlSubmission = uploadedFile && uploadedFile.type === "application/url";
-    
-    // Different handling based on submission type
+
     if (uploadedFile) {
-      // For file uploads, update document metadata in the database
       if (!isUrlSubmission && uploadedFile.id) {
-        // Convert preferences to string/JSON for storage
         const metadata = JSON.stringify({
           title: preferences.title,
           outputType: preferences.outputType,
@@ -227,17 +214,13 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
           allowPdfViewing: preferences.allowPdfViewing,
           customPageRange: preferences.customPageRange
         });
-        
-        // Update the document metadata
         await documentService.updateDocumentMetadata(uploadedFile.id, metadata);
-        
-        // Update page count if it was provided in preferences
+
         if (preferences.pageRange === "custom" && preferences.customPageRange) {
-          const pageCount = uploadedFile.pages; // Default to existing pages
+          const pageCount = uploadedFile.pages;
           await documentService.updateDocumentPageCount(uploadedFile.id, pageCount);
         }
-        
-        // Add the file to the app context
+
         addFile({
           id: uploadedFile.id.toString(),
           name: preferences.title || uploadedFile.name,
@@ -257,24 +240,18 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
           uploadedAt: new Date()
         });
       }
-      
-      // Now create the summary request to the AI service
+
       if (preferences.outputType !== "none") {
-        // Get the userId from your authentication context
-        const userId = user?.username; // TODO: Replace with actual user ID from auth context
-        
-        // Create the summary request based on the output type
+        const userId = user?.username;
+
         const summaryRequest: SummaryCreate = {
           content_url: uploadedFile.url,
           summary_length: preferences.noteLength === "in-depth" ? "long" : "medium",
           tags: []
         };
-        
-        // Add custom prompt if provided
         if (preferences.customPrompt) {
           summaryRequest.prompt = preferences.customPrompt;
         } else {
-          // Create a prompt based on preferences
           const outputTypePrompt = preferences.outputType === "notes" 
             ? "Create detailed notes" 
             : preferences.outputType === "flashcards"
@@ -453,7 +430,7 @@ const handlePreferencesSubmit = async (preferences: SummaryPreferences) => {
   );
 }
 
-// Helper function to format file size
+
 function formatFileSize(sizeInBytes: number): string {
   if (sizeInBytes < 1024) {
     return sizeInBytes + " B";

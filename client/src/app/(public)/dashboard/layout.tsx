@@ -31,7 +31,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
       <>
-        {/*<ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>*/}
         <SidebarProvider className='h-screen w-screen overflow-hidden'>
           <div className='flex h-full w-full'>
             <AppSidebar/>

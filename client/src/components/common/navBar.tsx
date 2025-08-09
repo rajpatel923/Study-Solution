@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
-import { Menu, X, ArrowRight, Zap, Search } from 'lucide-react';
+import { Menu, X, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from "next/image";
 interface NavItem {
@@ -151,7 +151,7 @@ export default function Header2() {
                 </motion.div>
               </motion.div>
               <motion.button
-                  className="text-white hover:bg-muted hover:text-black rounded-lg p-2 transition-colors duration-200 lg:hidden"
+                  className=" hover:bg-muted text-black rounded-lg p-2 transition-colors duration-200 lg:hidden"
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   variants={itemVariants}
                   whileTap={{ scale: 0.95 }}
@@ -159,7 +159,7 @@ export default function Header2() {
                 {isMobileMenuOpen ? (
                     <X className="h-6 w-6" />
                 ) : (
-                    <Menu className="h-6 w-6" />
+                    <Menu className="h-6 w-6 " />
                 )}
               </motion.button>
             </div>
@@ -201,14 +201,14 @@ export default function Header2() {
                         variants={mobileItemVariants}
                     >
                       <Link
-                          href="/login"
+                          href="/auth?authMode=sign-in"
                           className="text-foreground hover:bg-muted block w-full rounded-lg py-3 text-center font-medium transition-colors duration-200"
                           onClick={() => setIsMobileMenuOpen(false)}
                       >
                         Sign In
                       </Link>
                       <Link
-                          href="/signup"
+                          href="/auth?authMode=sign-up"
                           className="bg-foreground text-background hover:bg-foreground/90 block w-full rounded-lg py-3 text-center font-medium transition-all duration-200"
                           onClick={() => setIsMobileMenuOpen(false)}
                       >

@@ -16,8 +16,7 @@ export default function DocumentList() {
   
   useEffect(() => {
     if (!listRef.current || files.length === 0) return;
-    
-    // Animate new items
+
     const items = listRef.current.querySelectorAll('.document-item');
     const newItem = items[items.length - 1];
     
@@ -105,7 +104,6 @@ export default function DocumentList() {
   );
 }
 
-// Helper function to format file size
 function formatFileSize(sizeInBytes: number): string {
   if (sizeInBytes < 1024) {
     return sizeInBytes + " B";

@@ -5,7 +5,6 @@ import React from "react";
 import SummaryOptions from "@/components/study-tools/summarizer/SummaryOptions";
 import DocumentList from "@/components/study-tools/summarizer/DocumentList";
 import DemoSection from "@/components/study-tools/summarizer/DemoSection";
-import SummaryCTA from "@/components/study-tools/summarizer/summaryCTA";
 
 const Summarizer = () => {
   return (

@@ -5,19 +5,16 @@ import { useRouter } from 'next/navigation';
 import axios from "axios";
 import {generateAccessTokenFromRefreshToken, getProfile} from "@/services/authService";
 
-// Define user interface
 export interface User {
-  id: string | number;
+  id: number;
   username: string;
   email: string;
-  name?: string;
-  roles?: string[];
-  oAuthProvider?: string | null;
-  avatarUrl?: string | null;
-  plan?: string;
+  roles: string[];
+  oAuthProvider: string | null;
+  enabled: boolean;
+  oAuthProviderId: string;
 }
 
-// Define auth context interface
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -30,7 +27,7 @@ interface AuthContextType {
   clearError: () => void;
 }
 
-// Define registration data interface
+
 export interface RegisterData {
   username: string;
   email: string;
@@ -39,10 +36,9 @@ export interface RegisterData {
   birthday?: string;
 }
 
-// Create auth context
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Auth provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -50,10 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // API URL
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8091';
 
-  // Initialize authentication state on load
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
