@@ -2,7 +2,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains.summarize import load_summarize_chain
 
 from langchain_openai import ChatOpenAI
-from langchain_ollama.llms import OllamaLLM
 
 from langchain.prompts import PromptTemplate
 from app.utils.content_loader import load_content, detect_content_type
@@ -11,6 +10,7 @@ from bson import ObjectId
 import os
 import datetime
 from typing import List, Dict, Any, Tuple
+from functools import lru_cache
 
 
 def get_summary_by_id(summary_id: str) -> dict:
@@ -98,24 +98,51 @@ def get_summaries_for_user(user_id: str, limit: int = 10) -> dict:
 
 
 def split_into_chunks(documents: List[Any],
-                      chunk_size: int = 1500,
-                      chunk_overlap: int = 100) -> List[Any]:
+                      chunk_size: int = None,
+                      chunk_overlap: int = None,
+                      content_type: str = "pdf") -> List[Any]:
     """
-    Splits documents into smaller chunks suitable for LLM processing.
+    Splits documents into smaller chunks suitable for LLM processing with content-specific optimization.
 
     Args:
         documents: List of document objects from content loader
-        chunk_size: Maximum size of each chunk in characters
-        chunk_overlap: Overlap between chunks in characters
+        chunk_size: Maximum size of each chunk in characters (auto-optimized if None)
+        chunk_overlap: Overlap between chunks in characters (auto-optimized if None)
+        content_type: Type of content for optimization
 
     Returns:
         List of document chunks
     """
-    # Initialize text splitter with appropriate parameters
+    # Optimized chunking parameters based on content type
+    if chunk_size is None or chunk_overlap is None:
+        chunk_configs = {
+            'pdf': {'chunk_size': 2000, 'chunk_overlap': 200},
+            'youtube': {'chunk_size': 3000, 'chunk_overlap': 300},  # Longer for transcripts
+            'powerpoint': {'chunk_size': 1200, 'chunk_overlap': 120},  # Shorter for slides
+            'image': {'chunk_size': 1500, 'chunk_overlap': 150},
+            'webpage': {'chunk_size': 2000, 'chunk_overlap': 200},
+            'default': {'chunk_size': 1800, 'chunk_overlap': 180}
+        }
+        config = chunk_configs.get(content_type, chunk_configs['default'])
+        chunk_size = chunk_size or config['chunk_size']
+        chunk_overlap = chunk_overlap or config['chunk_overlap']
+
+    # Content-specific separators for better chunking
+    separators_by_type = {
+        'pdf': ["\n\n", "\n", ". ", " ", ""],
+        'youtube': ["\n\n", ". ", "\n", " ", ""],
+        'powerpoint': ["\n\n", "\n", "• ", "- ", ". ", " ", ""],
+        'webpage': ["\n\n", "\n", "</p>", ". ", " ", ""],
+        'image': ["\n\n", "\n", ". ", " ", ""],
+        'default': ["\n\n", "\n", ". ", " ", ""]
+    }
+    separators = separators_by_type.get(content_type, separators_by_type['default'])
+
+    # Initialize text splitter with optimized parameters
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ". ", " ", ""]
+        separators=separators
     )
 
     # Split documents into chunks
@@ -125,10 +152,11 @@ def split_into_chunks(documents: List[Any],
 def process_document_in_chunks(documents: List[Any],
                                chain: Any,
                                user_prompt: str = None,
-                               max_chunks_per_batch: int = 10,
+                               max_chunks_per_batch: int = 8,  # Reduced batch size for better performance
                                chain_type: str = "map_reduce") -> str:
     """
     Processes documents in manageable batches to avoid context length issues.
+    FIXED: Corrected refine chain logic to replace instead of concatenate summaries.
 
     Args:
         documents: List of document chunks
@@ -143,7 +171,7 @@ def process_document_in_chunks(documents: List[Any],
     if not documents:
         return "No document content to process."
 
-    default_prompt = "Provide a comprehensive academic summary"
+    default_prompt = "Provide a comprehensive summary of the key points and main ideas"
     prompt_to_use = user_prompt if user_prompt else default_prompt
 
     # For refine chain type, process chunks sequentially
@@ -154,7 +182,7 @@ def process_document_in_chunks(documents: List[Any],
             "user_prompt": prompt_to_use
         })["output_text"]
 
-        # Refine with subsequent chunks
+        # FIXED: Refine with subsequent chunks (replace, don't concatenate)
         for i in range(1, len(documents)):
             current_summary = chain.invoke({
                 "input_documents": [documents[i]],
@@ -164,20 +192,23 @@ def process_document_in_chunks(documents: List[Any],
 
         return current_summary
 
-    # If fewer chunks than max batch size, process directly
+    # For small documents, process directly
     if len(documents) <= max_chunks_per_batch:
         return chain.invoke({
             "input_documents": documents,
             "user_prompt": prompt_to_use
         })["output_text"]
 
-    # For larger documents, process in batches
-    batches = [documents[i:i + max_chunks_per_batch]
-               for i in range(0, len(documents), max_chunks_per_batch)]
+    # For larger documents, use improved batching strategy
+    batch_size = max_chunks_per_batch
+    batches = [documents[i:i + batch_size]
+               for i in range(0, len(documents), batch_size)]
 
-    # Process initial batches to get intermediate summaries
+    # Process batches to get intermediate summaries
     intermediate_results = []
-    for batch in batches:
+    for i, batch in enumerate(batches):
+        print(f"Processing batch {i + 1}/{len(batches)} with {len(batch)} chunks")
+
         batch_summary = chain.invoke({
             "input_documents": batch,
             "user_prompt": prompt_to_use
@@ -191,7 +222,7 @@ def process_document_in_chunks(documents: List[Any],
         for result in intermediate_results
     ]
 
-    # Create final combined summary using the same chain for consistency
+    # Create final combined summary
     final_summary = chain.invoke({
         "input_documents": intermediate_docs,
         "user_prompt": prompt_to_use
@@ -200,9 +231,11 @@ def process_document_in_chunks(documents: List[Any],
     return final_summary
 
 
+@lru_cache(maxsize=20)
 def get_content_specific_prompt(content_type: str, chain_type: str = "map_reduce") -> Tuple[str, str]:
     """
-    Returns content-specific prompt templates based on the content type
+    Returns optimized content-specific prompt templates based on the content type.
+    IMPROVED: Simplified prompts for better performance and quality.
 
     Args:
         content_type: The type of content ('pdf', 'youtube', etc.)
@@ -211,374 +244,219 @@ def get_content_specific_prompt(content_type: str, chain_type: str = "map_reduce
     Returns:
         Tuple[str, str]: Primary and secondary prompt templates
     """
-    # Base prompt templates
-    base_map_template = """
-        Create a detailed summary of this document section focusing on: {user_prompt}
 
-        CONTENT:
-        {text}
-
-        Your summary should:
-        - Address the specific focus requested
-        - Capture main ideas and key arguments
-        - Use clear, academic language
-        - Be accurate and concise
-    """
-
-    base_reduce_template = """
-        Synthesize these section summaries into a coherent summary that addresses: {user_prompt}
-
-        SUMMARIES:
-        {text}
-
-        Your final summary should:
-        - Present a unified flow of information
-        - Include all key concepts and important details
-        - Maintain academic tone and language
-        - Be thorough yet concise
-    """
-
-    base_initial_template = """
-        Create a rich, detailed summary of the following academic content based on this request: '{user_prompt}'
-
-        CONTENT:
-        {text}
-
-        Your summary should:
-        - Address the specific focus requested
-        - Capture main ideas, key arguments, and supporting evidence
-        - Use clear, academic language 
-        - Organize information logically
-        - Maintain accuracy to the source
-        - Be thorough yet concise
-    """
-
-    base_refine_template = """
-        Your task is to create a comprehensive summary based on the provided context and existing summary.
-
-        EXISTING SUMMARY:
-        {existing_summary}
-
-        NEW CONTEXT:
-        {text}
-
-        Using the new context, enhance and expand upon the existing summary.
-        Focus particularly on: {user_prompt}
-
-        In your summary:
-        - Maintain academic language and clarity
-        - Include key concepts, arguments, and supporting evidence
-        - Organize information logically
-        - Ensure accuracy to the source material
-
-        If the new context doesn't add value, return the original summary.
-    """
-
-    # YouTube-specific prompts
+    # Optimized base prompts - shorter and more focused
     if content_type == 'youtube':
         if chain_type == "map_reduce":
-            map_template = """
-                Create a detailed summary of this video transcript section focusing on: {user_prompt}
+            map_template = """Summarize this video transcript section focusing on: {user_prompt}
 
-                TRANSCRIPT SECTION:
-                {text}
+TRANSCRIPT:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture main ideas, key points, and examples
-                - Maintain a clear, educational tone
-                - Preserve the speaker's main arguments
-                - Be accurate and concise
-            """
+Extract the main points, key insights, and actionable information. Be concise and clear."""
 
-            reduce_template = """
-                Synthesize these transcript summaries into a coherent video summary that addresses: {user_prompt}
+            reduce_template = """Combine these video section summaries into one comprehensive summary focusing on: {user_prompt}
 
-                SECTION SUMMARIES:
-                {text}
+SECTIONS:
+{text}
 
-                Your final video summary should:
-                - Present information in a logical flow
-                - Highlight the most important concepts and takeaways
-                - Maintain an educational tone
-                - Include key examples or illustrations mentioned
-                - Be thorough yet accessible
-            """
+Create a well-organized summary highlighting the main message, key insights, and important takeaways."""
 
             return map_template, reduce_template
 
         else:  # refine
-            initial_template = """
-                Create a detailed summary of this video transcript section focusing on: {user_prompt}
+            initial_template = """Create a summary of this video transcript focusing on: {user_prompt}
 
-                TRANSCRIPT SECTION:
-                {text}
+TRANSCRIPT:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture main ideas, key points, and examples
-                - Maintain a clear, educational tone
-                - Preserve the speaker's main arguments
-                - Be thorough and well-structured
-            """
+Capture the main ideas, key points, and important insights clearly and concisely."""
 
-            refine_template = """
-                Enhance this video summary with additional information from the transcript.
+            refine_template = """Improve this video summary using new transcript content.
 
-                EXISTING SUMMARY:
-                {existing_summary}
+CURRENT SUMMARY:
+{existing_summary}
 
-                NEW TRANSCRIPT SECTION:
-                {text}
+NEW CONTENT:
+{text}
 
-                Using the new section, enhance the existing summary.
-                Focus particularly on: {user_prompt}
+Focus on: {user_prompt}
 
-                Your enhanced summary should:
-                - Integrate new information seamlessly
-                - Maintain a clear, educational tone
-                - Preserve the logical flow and structure
-                - Add any important new points, examples, or details
-
-                If the new section doesn't add value, return the original summary.
-            """
+Enhance the summary by adding important new information while maintaining clarity and flow."""
 
             return initial_template, refine_template
 
-    # PowerPoint-specific prompts
     elif content_type == 'powerpoint':
         if chain_type == "map_reduce":
-            map_template = """
-                Create a detailed summary of this presentation slide focusing on: {user_prompt}
+            map_template = """Summarize this presentation slide focusing on: {user_prompt}
 
-                SLIDE CONTENT:
-                {text}
+SLIDE:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture the main points and key information from the slide
-                - Preserve the structure and relationships between concepts
-                - Include any important examples or illustrations mentioned
-                - Be clear and educational in tone
-            """
+Extract key points, main concepts, and important information. Maintain the logical structure."""
 
-            reduce_template = """
-                Synthesize these slide summaries into a coherent presentation summary that addresses: {user_prompt}
+            reduce_template = """Combine these slide summaries into a coherent presentation overview focusing on: {user_prompt}
 
-                SLIDE SUMMARIES:
-                {text}
+SLIDES:
+{text}
 
-                Your final presentation summary should:
-                - Present a unified narrative of the entire presentation
-                - Maintain the logical flow between slides and sections
-                - Highlight the most important concepts and takeaways
-                - Preserve key examples and illustrations
-                - Be thorough yet accessible
-            """
+Create a unified summary that captures the presentation's main message and key points."""
 
             return map_template, reduce_template
 
         else:  # refine
-            initial_template = """
-                Create a detailed summary of this presentation slide focusing on: {user_prompt}
+            initial_template = """Summarize this presentation slide focusing on: {user_prompt}
 
-                SLIDE CONTENT:
-                {text}
+SLIDE:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture the main points and key information from the slide
-                - Preserve the structure and relationships between concepts
-                - Include any important examples or illustrations mentioned
-                - Be clear and educational in tone
-            """
+Capture the main points and key information clearly."""
 
-            refine_template = """
-                Enhance this presentation summary with additional information from this slide.
+            refine_template = """Enhance this presentation summary with new slide content.
 
-                EXISTING SUMMARY:
-                {existing_summary}
+CURRENT SUMMARY:
+{existing_summary}
 
-                NEW SLIDE CONTENT:
-                {text}
+NEW SLIDE:
+{text}
 
-                Using the new slide, enhance the existing summary.
-                Focus particularly on: {user_prompt}
+Focus on: {user_prompt}
 
-                Your enhanced summary should:
-                - Integrate the new slide content seamlessly
-                - Maintain the logical flow and narrative of the presentation
-                - Add any important new points, examples, or details
-                - Preserve the educational tone and clarity
-
-                If the new slide doesn't add value, return the original summary.
-            """
+Add relevant new information while maintaining the presentation's logical flow."""
 
             return initial_template, refine_template
 
-    # Handwritten notes-specific prompts
     elif content_type == 'image':
         if chain_type == "map_reduce":
-            map_template = """
-                Create a detailed summary of these handwritten notes focusing on: {user_prompt}
+            map_template = """Organize and summarize these handwritten notes focusing on: {user_prompt}
 
-                NOTES CONTENT:
-                {text}
+NOTES:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Organize the handwritten content into a clear, structured format
-                - Clarify any ambiguous or fragmented points
-                - Connect related concepts
-                - Present the information in a logical, academic manner
-            """
+Structure the content clearly, connecting related concepts and clarifying key points."""
 
-            reduce_template = """
-                Synthesize these note summaries into a coherent study guide that addresses: {user_prompt}
+            reduce_template = """Combine these note sections into a comprehensive study guide focusing on: {user_prompt}
 
-                NOTE SUMMARIES:
-                {text}
+SECTIONS:
+{text}
 
-                Your final study guide should:
-                - Present a unified, well-organized version of the notes
-                - Connect related concepts across different sections
-                - Highlight the most important principles and key points
-                - Clarify any ambiguous concepts or terminology
-                - Be thorough, structured, and educational
-            """
+Create a well-organized summary that clarifies concepts and highlights important information."""
 
             return map_template, reduce_template
 
         else:  # refine
-            initial_template = """
-                Create a detailed summary of these handwritten notes focusing on: {user_prompt}
+            initial_template = """Organize these handwritten notes focusing on: {user_prompt}
 
-                NOTES CONTENT:
-                {text}
+NOTES:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Organize the handwritten content into a clear, structured format
-                - Clarify any ambiguous or fragmented points
-                - Connect related concepts
-                - Present the information in a logical, academic manner
-            """
+Structure the content clearly and highlight key concepts."""
 
-            refine_template = """
-                Enhance this notes summary with additional information from these notes.
+            refine_template = """Improve this notes summary with additional content.
 
-                EXISTING SUMMARY:
-                {existing_summary}
+CURRENT SUMMARY:
+{existing_summary}
 
-                NEW NOTES CONTENT:
-                {text}
+NEW NOTES:
+{text}
 
-                Using the new notes, enhance the existing summary.
-                Focus particularly on: {user_prompt}
+Focus on: {user_prompt}
 
-                Your enhanced summary should:
-                - Integrate the new notes seamlessly
-                - Improve the organization and structure
-                - Add any important new concepts or details
-                - Clarify any previously ambiguous points
-                - Maintain a logical, educational tone
-
-                If the new notes don't add value, return the original summary.
-            """
+Add new information while improving organization and clarity."""
 
             return initial_template, refine_template
 
-    # Webpage-specific prompts
     elif content_type == 'webpage':
         if chain_type == "map_reduce":
-            map_template = """
-                Create a detailed summary of this webpage section focusing on: {user_prompt}
+            map_template = """Summarize this webpage content focusing on: {user_prompt}
 
-                WEBPAGE CONTENT:
-                {text}
+CONTENT:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture the main ideas and key information
-                - Identify the purpose and main arguments
-                - Filter out advertisements or irrelevant content
-                - Present information clearly and objectively
-            """
+Extract main ideas and key information, filtering out irrelevant details."""
 
-            reduce_template = """
-                Synthesize these webpage section summaries into a coherent overview that addresses: {user_prompt}
+            reduce_template = """Combine these webpage sections into a comprehensive summary focusing on: {user_prompt}
 
-                SECTION SUMMARIES:
-                {text}
+SECTIONS:
+{text}
 
-                Your final webpage summary should:
-                - Present a unified understanding of the webpage's content
-                - Highlight the most important information and key points
-                - Organize information logically
-                - Filter out any redundancies
-                - Be thorough, objective, and informative
-            """
+Create a unified overview highlighting the most important information."""
 
             return map_template, reduce_template
 
         else:  # refine
-            initial_template = """
-                Create a detailed summary of this webpage section focusing on: {user_prompt}
+            initial_template = """Summarize this webpage content focusing on: {user_prompt}
 
-                WEBPAGE CONTENT:
-                {text}
+CONTENT:
+{text}
 
-                Your summary should:
-                - Address the specific focus requested
-                - Capture the main ideas and key information
-                - Identify the purpose and main arguments
-                - Filter out advertisements or irrelevant content
-                - Present information clearly and objectively
-            """
+Extract the main ideas and key information clearly."""
 
-            refine_template = """
-                Enhance this webpage summary with additional information from this section.
+            refine_template = """Enhance this webpage summary with additional content.
 
-                EXISTING SUMMARY:
-                {existing_summary}
+CURRENT SUMMARY:
+{existing_summary}
 
-                NEW WEBPAGE SECTION:
-                {text}
+NEW CONTENT:
+{text}
 
-                Using the new section, enhance the existing summary.
-                Focus particularly on: {user_prompt}
+Focus on: {user_prompt}
 
-                Your enhanced summary should:
-                - Integrate the new information seamlessly
-                - Maintain objectivity and clarity
-                - Add any important new points or details
-                - Filter out redundancies or irrelevant content
-                - Preserve the logical structure
-
-                If the new section doesn't add value, return the original summary.
-            """
+Add relevant new information while maintaining clarity and organization."""
 
             return initial_template, refine_template
 
-    # Default to the base prompts for PDFs and other document types
+    # Default prompts for PDFs and other documents - also optimized
     if chain_type == "map_reduce":
-        return base_map_template, base_reduce_template
+        map_template = """Summarize this document section focusing on: {user_prompt}
+
+CONTENT:
+{text}
+
+Extract main concepts, key findings, and important details clearly and concisely."""
+
+        reduce_template = """Combine these document sections into a comprehensive summary focusing on: {user_prompt}
+
+SECTIONS:
+{text}
+
+Create a well-organized summary with key concepts, findings, and conclusions."""
+
+        return map_template, reduce_template
     else:  # refine
-        return base_initial_template, base_refine_template
+        initial_template = """Create a detailed summary focusing on: {user_prompt}
+
+CONTENT:
+{text}
+
+Capture main ideas, key arguments, and supporting evidence clearly."""
+
+        refine_template = """Enhance this summary with new content.
+
+CURRENT SUMMARY:
+{existing_summary}
+
+NEW CONTENT:
+{text}
+
+Focus on: {user_prompt}
+
+Add important new information while maintaining accuracy and flow."""
+
+        return initial_template, refine_template
 
 
 def summarize_content(content_url: str, user_id: str, prompt: str = None, summary_length: str = "medium",
                       content_type: str = None) -> dict:
     """
-    Summarizes content from a URL (PDF, YouTube, PowerPoint, etc.), optionally based on a user prompt,
-    and stores the summary in MongoDB. Handles large content by processing in chunks.
+    Summarizes content from a URL with performance optimizations and bug fixes.
+    IMPROVED: Better model selection, smarter processing strategy, and length optimization.
 
     Args:
-        content_url: URL of the content to summarize (PDF, YouTube, PowerPoint, webpage, image)
+        content_url: URL of the content to summarize
         user_id: Identifier for the user requesting the summary
         prompt: (Optional) User-provided prompt to guide summarization
-        summary_length: (Optional) Desired summary length ("short", "medium", "long").
-                       Defaults to "medium"
+        summary_length: (Optional) Desired summary length ("short", "medium", "long")
         content_type: (Optional) Type of content. If None, will be auto-detected
 
     Returns:
@@ -608,29 +486,38 @@ def summarize_content(content_url: str, user_id: str, prompt: str = None, summar
             "uploaded_at": datetime.datetime.utcnow()
         }
 
-        # 3. Initialize Language Model
+        # 3. Initialize Language Model with optimized settings
         llm = ChatOpenAI(
             openai_api_key=os.environ.get("OPENAI_API_KEY"),
-            model_name="gpt-4o",  # or gpt-4 for higher quality
-            temperature=0.5
+            model_name="gpt-4o-mini",  # IMPROVED: Faster and more cost-effective
+            temperature=0.3,  # IMPROVED: Lower temperature for more focused summaries
+            max_tokens=4000,  # IMPROVED: Explicit token limit
+            request_timeout=60  # IMPROVED: Timeout to prevent hanging
         )
-        # llm = OllamaLLM(
-        #     model ="llama3.2-vision:latest",
-        # )
 
-        # 4. Split text into chunks with our improved chunker
-        chunks = split_into_chunks(documents)
+        # 4. Split text into optimized chunks
+        chunks = split_into_chunks(documents, content_type=content_type)
+        print(f"Created {len(chunks)} chunks for processing")
 
-        # 5. Configure the summary approach based on length and document size
-        chain_type = "map_reduce" if len(chunks) > 15 else "refine"
+        # 5. IMPROVED: Smarter processing strategy based on document size
+        num_chunks = len(chunks)
+        if num_chunks <= 5:
+            chain_type = "refine"
+            max_batch_size = num_chunks
+        elif num_chunks <= 20:
+            chain_type = "map_reduce"
+            max_batch_size = 6
+        else:
+            chain_type = "map_reduce"
+            max_batch_size = 8
+
         summary_type = "custom" if prompt else "standard"
 
-        # 6. Set up prompts based on content type and summary type
+        # 6. Set up optimized prompts
         primary_template, secondary_template = get_content_specific_prompt(content_type, chain_type)
 
-        # Initialize prompt templates
+        # Initialize prompt templates and chains
         if chain_type == "refine":
-            # Set up the chain for refine approach
             initial_prompt = PromptTemplate.from_template(primary_template)
             refine_prompt = PromptTemplate.from_template(secondary_template)
 
@@ -641,7 +528,6 @@ def summarize_content(content_url: str, user_id: str, prompt: str = None, summar
                 refine_prompt=refine_prompt,
             )
         else:  # map_reduce
-            # Set up the chain for map_reduce approach
             map_prompt = PromptTemplate.from_template(primary_template)
             combine_prompt = PromptTemplate.from_template(secondary_template)
 
@@ -652,35 +538,33 @@ def summarize_content(content_url: str, user_id: str, prompt: str = None, summar
                 combine_prompt=combine_prompt
             )
 
-        # 7. Process document in chunks
+        # 7. Process document with improved batching
         summary_output = process_document_in_chunks(
-            chunks, chain, prompt, chain_type=chain_type
+            chunks, chain, prompt, max_chunks_per_batch=max_batch_size, chain_type=chain_type
         )
 
-        # 8. Adjust Summary Length if needed
-        if summary_length == "short":
-            # For short summaries, ask LLM to condense
-            condense_prompt = PromptTemplate.from_template(
-                "Condense the following summary to approximately 300-500 words while "
-                "retaining all key information and main points:\n\n{original_summary}\n\n"
-                "Condensed summary:"
-            )
-            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-            summary_output = condensed_summary
+        # 8. IMPROVED: Smart length adjustment
+        word_count = len(summary_output.split())
+        target_ranges = {
+            "short": (250, 400),
+            "medium": (500, 800),
+            "long": (900, 1400)
+        }
 
-        elif summary_length == "long":
-            # Long summaries can use the full output
-            pass  # No modification needed
+        target_min, target_max = target_ranges.get(summary_length, target_ranges["medium"])
 
-        elif summary_length == "medium" and len(summary_output.split()) > 750:
-            # For medium summaries that are too long, ask LLM to condense
-            condense_prompt = PromptTemplate.from_template(
-                "Condense the following summary to approximately 600-750 words while "
-                "retaining all key information and main points:\n\n{original_summary}\n\n"
-                "Condensed summary:"
-            )
-            condensed_summary = llm.predict(condense_prompt.format(original_summary=summary_output))
-            summary_output = condensed_summary
+        # Only adjust if significantly outside target range (20% tolerance)
+        if word_count < target_min * 0.8 or word_count > target_max * 1.2:
+            adjustment_prompt = f"""Adjust this summary to {target_min}-{target_max} words while preserving all key information:
+
+{summary_output}
+
+Adjusted summary:"""
+
+            try:
+                summary_output = llm.predict(adjustment_prompt)
+            except Exception as e:
+                print(f"Length adjustment failed: {e}. Using original summary.")
 
         # 9. Store Summary in MongoDB
         db_client = get_mongodb_client()
@@ -706,7 +590,12 @@ def summarize_content(content_url: str, user_id: str, prompt: str = None, summar
             "length": summary_length,
             "created_at": datetime.datetime.utcnow(),
             "word_count": len(summary_output.split()),
-            "content_type": content_type  # Store the content type
+            "content_type": content_type,
+            "processing_stats": {
+                "chunks_created": len(chunks),
+                "chain_type_used": chain_type,
+                "batch_size_used": max_batch_size
+            }
         }
 
         # Insert summary into MongoDB
@@ -719,7 +608,8 @@ def summarize_content(content_url: str, user_id: str, prompt: str = None, summar
             "summary_id": str(summary_result.inserted_id),
             "document_id": str(document_id),
             "word_count": len(summary_output.split()),
-            "content_type": content_type
+            "content_type": content_type,
+            "chunks_processed": len(chunks)
         }
 
     except Exception as e:

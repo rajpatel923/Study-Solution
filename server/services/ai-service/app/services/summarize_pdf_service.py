@@ -149,14 +149,15 @@ def process_document_in_chunks(documents: List[Any],
     # For refine chain type, process chunks sequentially
     if chain_type == "refine":
         # Start with first chunk
-        current_summary = chain.invoke({
+        current_summary = ""
+        current_summary += chain.invoke({
             "input_documents": [documents[0]],
             "user_prompt": prompt_to_use
         })["output_text"]
 
         # Refine with subsequent chunks
         for i in range(1, len(documents)):
-            current_summary = chain.invoke({
+            current_summary += chain.invoke({
                 "input_documents": [documents[i]],
                 "existing_summary": current_summary,
                 "user_prompt": prompt_to_use
@@ -342,6 +343,7 @@ def summarize_pdf_notes(pdf_url: str, user_id: str, prompt: str = None, summary_
         summary_output = process_document_in_chunks(
             chunks, chain, prompt, chain_type=chain_type
         )
+        print(summary_output)
 
 
 

@@ -13,8 +13,8 @@ import java.util.Collections;
 @Configuration
 public class CorsConfig {
 
-    @Value("${frontend_url}")
-    private String FRONTEND_URL;
+//    @Value("${frontend_url}")
+//    private String FRONTEND_URL;
 
     @Bean
     public CorsWebFilter corsWebFilter() {

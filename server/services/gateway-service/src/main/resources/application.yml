@@ -19,20 +19,20 @@ spring:
       client:
         registration:
           github:
-            client-id:
-            client-secret:
+            client-id: ${GITHUB_AUTH_CLIENT_ID}
+            client-secret: ${GITHUB_AUTH_CLIENT_SECRET}
           google:
-            client-id:
-            client-secret:
+            client-id: ${GOOGLE_AUTH_CLIENT_ID}
+            client-secret: ${GOOGLE_AUTH_CLIENT_SECRET}
           facebook:
-            client-id:
-            client-secret:
+            client-id: ${FACEBOOK_AUTH_CLIENT_ID}
+            client-secret: ${FACEBOOK_AUTH_CLIENT_SECRET}
           apple:
-            client-id:
-            client-secret:
-            team-id:     # Missing property - causing the error
-            key-id:          # Likely missing as well
-            key-path: 
+            client-id: ${APPLE_AUTH_CLIENT_ID}
+            client-secret: ${APPLE_AUTH_CLIENT_SECRET}
+            team-id: ${APPLE_AUTH_TEAM_ID}
+            key-id: ${APPLE_AUTH_KEY_ID}
+            key-path: ${APPLE_AUTH_KEY_PATH}
 
 
 jwt:
