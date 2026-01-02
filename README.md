@@ -1,4 +1,4 @@
-# Study-Reinforcement-
+# Study-Sync-Arch
 
 ![Alt Text](StudySync.drawio.png)
 
