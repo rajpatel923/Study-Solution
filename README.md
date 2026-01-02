@@ -1,5 +1,7 @@
 # Study-Reinforcement-
 
+![Alt Text](StudySync.drawio.png)
+
 # Server
 
 here we are using spring boot and python for handling backend task
